@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>LAN Cloak - Help</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" media="print" onload="this.media='all'">
+  <style>
+    :root {
+      --bg: #000; --bg2: #070407; --surface: #0a060a; --surface2: #160a14;
+      --border: #2a1a29; --border2: #4a2446;
+      --acc: #ff3dd2; --amber: #ff6a1f; --red: #ff4d6a; --dnsc: #00ff88; --ipset: #00aaff; --vhs: #fcee0a; --wgs: #7dd3fc;
+      --text: #f3eaf2; --dim: #9a8c9b; --hi: #fff6fd;
+      --mono: 'Share Tech Mono', ui-monospace, 'Roboto Mono', Menlo, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 70px); }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.7; min-height: 100vh; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+    .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); display: flex; align-items: center; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 10; }
+    .h-title { font-family: var(--mono); font-size: 14px; color: var(--acc); letter-spacing: 1.5px; text-transform: uppercase; }
+    .h-sub { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 1px; }
+    .back-btn { background: transparent; border: 1px solid var(--acc); border-radius: 3px; color: var(--acc); padding: 7px 14px; font-size: 11px; font-family: var(--mono); letter-spacing: 1px; cursor: pointer; }
+    .back-btn:active { background: var(--acc); color: #000; }
+    :focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+    .toc { margin: 14px 14px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 12px 14px; }
+    .toc-title { font-size: 9px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .14em; color: var(--dim); margin-bottom: 8px; }
+    .toc a { display: block; color: var(--acc); text-decoration: none; font-size: 12.5px; font-family: var(--mono); padding: 3px 0; }
+    .sec-title { font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: var(--dim); font-family: var(--mono); padding: 26px 16px 8px; }
+    .sec-title::before { content: '// '; color: var(--acc); opacity: .6; }
+    .box { margin: 0 14px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; }
+    .box p { margin-bottom: 10px; } .box p:last-child { margin-bottom: 0; }
+    .box h3 { font-family: var(--mono); font-size: 13px; color: var(--acc); font-weight: normal; letter-spacing: .5px; margin: 16px 0 6px; }
+    .box h3:first-child { margin-top: 0; }
+    .box ul, .box ol { margin: 6px 0 10px 18px; } .box li { margin-bottom: 5px; }
+    strong { color: var(--hi); font-weight: 600; }
+    code { font-family: var(--mono); font-size: 12px; color: var(--amber); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; word-break: break-all; }
+    pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--text); margin: 8px 0; white-space: pre; }
+    pre .cm { color: var(--dim); }
+    .tw { overflow-x: auto; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 7px 8px 7px 0; color: var(--dim); font-weight: normal; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; font-size: 9.5px; border-bottom: 1px solid var(--border); }
+    td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    td:first-child { color: var(--hi); font-family: var(--mono); white-space: nowrap; padding-right: 12px; }
+    td.hid { color: var(--acc); font-family: var(--mono); } td.shown { color: var(--amber); font-family: var(--mono); }
+    .pill { display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: .8px; padding: 0 6px; border-radius: 2px; border: 1px solid; text-transform: uppercase; white-space: nowrap; }
+    .ok { color: var(--acc); border-color: rgba(255,61,210,.45); } .warn { color: var(--amber); border-color: rgba(255,106,31,.45); }
+    .bad { color: var(--red); border-color: rgba(255,77,106,.45); } .skip { color: var(--dim); border-color: var(--border); }
+    .note { border-left: 2px solid var(--acc); background: rgba(255,61,210,.06); padding: 10px 12px; border-radius: 0 4px 4px 0; margin: 10px 0; font-size: 13px; }
+    .note.warn { border-left-color: var(--amber); background: rgba(255,106,31,.07); }
+    .flow { font-family: var(--mono); font-size: 12px; color: var(--text); text-align: center; line-height: 1.9; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 10px; margin: 8px 0; }
+    .flow b { color: var(--acc); font-weight: normal; }
+    .flow .dn { color: var(--dnsc); } .flow .wg { color: var(--wgs); }
+    .footer { text-align: center; padding: 28px 16px 8px; font-size: 10px; font-family: var(--mono); color: var(--dim); }
+    .footer a { color: var(--acc); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="h-title">▣ Help</div>
+    <div class="h-sub">lan cloak · arm64</div>
+  </div>
+  <button class="back-btn" onclick="goBack()">‹ BACK</button>
+</div>
+
+<div class="toc">
+  <div class="toc-title">contents</div>
+  <a href="#what">1 · What this module does</a>
+  <a href="#start">2 · Quick start</a>
+  <a href="#seen">3 · What the router sees</a>
+  <a href="#dhcp">4 · DHCP cleaning</a>
+  <a href="#ann">5 · Announcements: mDNS, SSDP, LLMNR</a>
+  <a href="#states">6 · States and the dashboard</a>
+  <a href="#set">7 · With WG Shield, DNSCrypt Proxy, VPN Hotspot and ipset</a>
+  <a href="#limits">8 · What it does not hide</a>
+  <a href="#cli">9 · Command line</a>
+  <a href="#trouble">10 · Troubleshooting</a>
+  <a href="#files">11 · Files, update, uninstall</a>
+</div>
+
+<div class="sec-title" id="what">1 · what this module does</div>
+<div class="box">
+  <p>A VPN hides what the phone does on the internet. It cannot hide what the phone tells the <strong>local network</strong> it is connected to: the router of a hotel, a café, an office or your own home. Every phone on Wi-Fi does that all the time:</p>
+  <ul>
+    <li>When it connects, it asks the router for an address (DHCP) and sends its <strong>device name</strong> (for example <code>POCO-F6-Pro</code>), the text <code>android-dhcp-16</code> (Android and its version) and a list of settings that is typical for Android.</li>
+    <li>While connected, it <strong>announces itself and its apps</strong> to every device on the network (mDNS, SSDP) and sends name lookups to all of them (LLMNR): which cast and media apps are installed, Xiaomi's HyperConnect, and the like.</li>
+  </ul>
+  <p>LAN Cloak removes that: the DHCP request is cleaned in the kernel on its way out, and the announcements are dropped by the firewall before they leave the phone. Every part is a switch of its own.</p>
+  <p>It works on Android's <strong>Wi-Fi client interface only</strong> (normally <code>wlan0</code>). Hotspot interfaces, mobile data and VPN tunnels are never touched.</p>
+  <div class="tw"><table>
+    <tr><th>needs</th><th></th></tr>
+    <tr><td>Kernel</td><td>eBPF and tc classifiers: <code>CONFIG_BPF_SYSCALL</code>, <code>CONFIG_NET_CLS_BPF</code>, <code>CONFIG_NET_SCH_INGRESS</code> - in every Android GKI kernel. The installer loads the DHCP cleaner once to check; without these, only the announcement blocking works.</td></tr>
+    <tr><td>Device</td><td>arm64.</td></tr>
+    <tr><td>Root</td><td>SukiSU Ultra, KernelSU, APatch or Magisk (WebUI through MMRL / KSU WebUI Standalone).</td></tr>
+  </table></div>
+  <div class="note warn">Tested on a Poco F6 Pro with Xiaomi.eu HyperOS 3 (Android 16) and an android13-5.15 GKI kernel. The DHCP client is Android's own (NetworkStack), the same on every ROM, but other phones are not tested.</div>
+</div>
+
+<div class="sec-title" id="start">2 · quick start</div>
+<div class="box">
+  <ol>
+    <li>Flash the zip, reboot. Everything is on by default.</li>
+    <li>Open the WebUI. The top shows <strong>Seen by the router</strong>: four magenta tiles = nothing to see.</li>
+    <li>Tap <strong>Restart Wi-Fi</strong> (twice, to confirm) so a clean DHCP request goes out now. Dashboard → DHCP guard → <strong>Last request</strong> says <em>cleaned</em>.</li>
+    <li>Do you cast to a TV or a Chromecast, or print over Wi-Fi? Settings → turn <strong>Block mDNS</strong> (and for DLNA TVs <strong>Block SSDP</strong>) off. See 5.</li>
+  </ol>
+  <p>Your router may still list the old device name: it keeps it with the address lease until the lease ends (often 12 or 24 hours), or until you remove the device in the router's page.</p>
+</div>
+
+<div class="sec-title" id="seen">3 · what the router sees</div>
+<div class="box">
+  <div class="tw"><table>
+    <tr><th>item</th><th>without</th><th>with LAN Cloak</th></tr>
+    <tr><td>Device name</td><td class="shown">POCO-F6-Pro</td><td class="hid">nothing</td></tr>
+    <tr><td>Vendor class</td><td class="shown">android-dhcp-16</td><td class="hid">nothing</td></tr>
+    <tr><td>Request list</td><td class="shown">1,3,6,15,26,28,51,58,59,43,114,108</td><td class="hid">1,3,6,15,26,28,51,58,59</td></tr>
+    <tr><td>mDNS</td><td class="shown">the phone + its apps, every few seconds</td><td class="hid">nothing</td></tr>
+    <tr><td>SSDP</td><td class="shown">searches for UPnP devices</td><td class="hid">nothing</td></tr>
+    <tr><td>LLMNR</td><td class="shown">name lookups to all devices</td><td class="hid">nothing</td></tr>
+    <tr><td>MAC address</td><td colspan="2">unchanged - Android's (see 8)</td></tr>
+  </table></div>
+  <p>The tiles at the top of the WebUI show exactly this for the current settings: <span class="pill ok">hidden</span> in magenta, what still goes out in orange, red when a part failed. Below them: the Wi-Fi MAC address (and whether it is Android's random one or the factory address) and the IP address the router gave the phone.</p>
+</div>
+
+<div class="sec-title" id="dhcp">4 · dhcp cleaning</div>
+<div class="box">
+  <div class="flow">
+    Android's DHCP client<br>↓<br>
+    <b>DHCP cleaner</b> - eBPF in the kernel, on the Wi-Fi interface's way out<br>↓<br>
+    router
+  </div>
+  <h3>The three switches</h3>
+  <div class="tw"><table>
+    <tr><th>switch</th><th>DHCP option</th><th>what it does</th></tr>
+    <tr><td>Hide the device name</td><td>12, 81</td><td>Removes the host name (the device name from Settings → About phone, made DNS-safe) and the FQDN option. The router lists the phone without a name.</td></tr>
+    <tr><td>Hide the vendor class</td><td>60</td><td>Removes <code>android-dhcp-&lt;version&gt;</code>. The router does not learn the operating system or its version from it.</td></tr>
+    <tr><td>Generic request list</td><td>55</td><td>Keeps the 9 settings every client asks for and drops Android's typical extra ones (see below). Systems that identify devices on a network (the "fingerprint" databases routers and firewalls use) recognise Android by this list alone.</td></tr>
+  </table></div>
+  <h3>The generic list</h3>
+  <p>Kept: <code>1</code> subnet mask, <code>3</code> router, <code>6</code> DNS servers, <code>15</code> domain name, <code>26</code> MTU, <code>28</code> broadcast address, <code>51</code> lease time, <code>58</code> / <code>59</code> renewal times. Dropped: <code>43</code> vendor-specific information, <code>114</code> captive portal address, <code>108</code> "IPv6-only preferred". Nothing the phone needs is lost: Android finds a hotel login page by its own network check anyway, and without 108 the phone simply keeps IPv4 on networks that offer an IPv6-only mode.</p>
+  <h3>How it works</h3>
+  <p>A small eBPF program sits on the Wi-Fi interface (tc egress filter, priority 10, named <code>lan_cloak_dhcp</code>). It looks only at DHCP requests from the phone (UDP 68 → 67) and overwrites the chosen options with padding <strong>in place</strong>: the packet keeps its length, the checksum is corrected, nothing is ever dropped. Everything else passes untouched. Options that stay: the client ID (the MAC address, as always), the requested address, the maximum message size.</p>
+  <p>Android deletes the interface's traffic-control setup every time Wi-Fi goes off, and with it every filter. The <strong>DHCP guard</strong> (a small daemon, <code>lanc-bpf watch</code>) follows the interface and puts the cleaner back within about half a second - seconds before Android sends its first request when Wi-Fi connects again. It starts at early boot, so the first request after a reboot is clean too.</p>
+  <h3>When a change applies</h3>
+  <p>With the next DHCP request: when Wi-Fi connects, or when the lease is renewed (halfway through the lease). <strong>Restart Wi-Fi</strong> in the WebUI sends one now.</p>
+  <div class="note">In logcat you will see <code>E/netd: tcQdiscAddDevClsact(...[wlan0]) failure: File exists</code> each time Wi-Fi comes on. That is the guard having set things up before netd: harmless, netd's own filters work the same.</div>
+</div>
+
+<div class="sec-title" id="ann">5 · announcements: mdns, ssdp, llmnr</div>
+<div class="box">
+  <div class="tw"><table>
+    <tr><th>switch</th><th>blocks</th><th>stops working while on</th></tr>
+    <tr><td>Block mDNS</td><td>UDP 5353 to <code>224.0.0.251</code> / <code>ff02::fb</code>, and answers from port 5353</td><td><strong>Casting</strong> to a TV / Chromecast (Google Cast), Spotify Connect and similar "play on" lists, finding printers over Wi-Fi, Xiaomi HyperConnect / Mi Share discovery, other apps that look for devices nearby.</td></tr>
+    <tr><td>Block SSDP</td><td>UDP 1900 to <code>239.255.255.250</code> / <code>ff02::c</code> / <code>ff05::c</code>, and answers from port 1900</td><td>UPnP / DLNA: casting to DLNA TVs, media servers, some smart-home apps.</td></tr>
+    <tr><td>Block LLMNR</td><td>UDP 5355 to any multicast address, answers from port 5355 (UDP and TCP)</td><td>Nothing common on Android.</td></tr>
+  </table></div>
+  <p>The phone still <strong>receives</strong> other devices' announcements; it just never answers or announces itself. If you cast at home only, switch mDNS (and SSDP) off for a moment while casting, then on again - the switch acts at once, no reboot.</p>
+  <h3>How it works</h3>
+  <p>Two firewall chains, <code>LANC_OUT</code> (IPv4) and <code>LANC_OUT6</code> (IPv6), each with one jump at the <strong>end</strong> of <code>OUTPUT</code> and only for the Wi-Fi interface: <code>-A OUTPUT -o wlan0 -j LANC_OUT</code>. They only drop, never accept, so nothing of Android's or another module's rules is skipped. The watchdog puts them back if anything removes them.</p>
+  <p>Dashboard → <strong>Announcements blocked</strong> counts the dropped packets. The counters start at 0 whenever the rules are set again (boot, a change of settings).</p>
+</div>
+
+<div class="sec-title" id="states">6 · states and the dashboard</div>
+<div class="box">
+  <div class="tw"><table>
+    <tr><th>state</th><th>meaning</th></tr>
+    <tr><td><span class="pill ok">cloaked</span></td><td>Everything selected is in place. With Wi-Fi off the banner says <em>Cloak ready</em>: the guard waits and acts the moment Wi-Fi connects.</td></tr>
+    <tr><td><span class="pill bad">error</span></td><td>A part could not be set: the DHCP guard did not start (the kernel refused the program - the Log has the kernel's report), or the firewall rules failed. The other part keeps working. A failed guard is retried every 5 minutes, or at once with <strong>Check now</strong>.</td></tr>
+    <tr><td><span class="pill skip">off</span></td><td>Switched off in Settings, every option off, or the module disabled in the root manager. Wi-Fi works exactly as Android does it; nothing of the module is active.</td></tr>
+  </table></div>
+  <h3>DHCP guard</h3>
+  <p><strong>Guard</strong>: the daemon runs. <strong>Cleaner on the interface</strong>: the eBPF filter is in place right now (with Wi-Fi off it <em>waits for Wi-Fi</em>). <strong>Last request</strong>: when the phone last sent a DHCP request and whether anything was removed. <strong>Requests seen / cleaned</strong> and <strong>Removed</strong>: counted since the guard started. <em>skipped</em> (orange) counts requests with an option too long to rewrite safely; they were sent unchanged - send the Report if it ever appears.</p>
+  <h3>Watchdog</h3>
+  <p>Every 10 seconds (every 2 seconds in the first 2 minutes after boot) it checks that the guard runs with the right settings on the right interface and that the firewall rules are complete, and repairs what is not. Repairs are written to the Log.</p>
+  <h3>Log</h3>
+  <p><strong>Module</strong>: what the module did (starts, changes, repairs). <strong>DHCP guard</strong>: the guard's own log - every time Wi-Fi goes off and on, who removed the filter, how fast it was back.</p>
+</div>
+
+<div class="sec-title" id="set">7 · with wg shield, dnscrypt proxy, vpn hotspot and ipset</div>
+<div class="box">
+  <div class="flow">
+    what the <b>local network</b> sees of the phone → <b>LAN Cloak</b><br>
+    where internet traffic goes → <span class="wg">WG Shield</span><br>
+    name lookups → <span class="dn">DNSCrypt Proxy</span>
+  </div>
+  <p>Each module has one job and works alone; together they cover the phone on a foreign Wi-Fi. LAN Cloak's Dashboard shows whether the others are installed and what they are doing.</p>
+  <ul>
+    <li><strong>WG Shield</strong>: unrelated rules (routing there, an eBPF filter and firewall chains here). The tunnel, Android's network check and the hotel login page work the same with LAN Cloak.</li>
+    <li><strong>DNSCrypt Proxy</strong>: without it, the router sees every name the phone looks up. LAN Cloak does not change DNS.</li>
+    <li><strong>VPN Hotspot</strong>: the hotspot interfaces are not touched; hotspot devices announce themselves as they always would. A hotspot while connected to Wi-Fi works as before.</li>
+    <li><strong>ipset</strong>: independent.</li>
+  </ul>
+</div>
+
+<div class="sec-title" id="limits">8 · what it does not hide</div>
+<div class="box">
+  <ul>
+    <li><strong>The MAC address.</strong> The router always sees one. Android uses a random address per network by default (the WebUI says <em>randomized by Android</em>); the same network sees the same random address each time, so it still recognises the phone when it comes back.</li>
+    <li><strong>That a device is there</strong>: its address, how much it sends and when. That is what a router is for.</li>
+    <li><strong>Android's network check</strong> (a request to Google's <code>generate_204</code> on every new network) and the traffic around connecting: that is the VPN's part (WG Shield sends everything else through the tunnel).</li>
+    <li><strong>The device name elsewhere.</strong> Android may also show it as the Bluetooth, hotspot and Wi-Fi Direct name; LAN Cloak only keeps it out of DHCP.</li>
+    <li><strong>Other networks.</strong> Hotspot devices, mobile data (the carrier sees the SIM and the phone anyway), USB and Ethernet adapters.</li>
+  </ul>
+</div>
+
+<div class="sec-title" id="cli">9 · command line</div>
+<div class="box">
+  <p>Every WebUI action is a <code>ctl.sh</code> command. From Termux:</p>
+<pre>su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh status'   <span class="cm"># fresh check, everything</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set BLOCK_MDNS 0'   <span class="cm"># mDNS allowed</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set BLOCK_MDNS 1'
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set ENABLED 0'   <span class="cm"># everything off</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh dhcp'   <span class="cm"># the cleaner's counters</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh wifi-restart'   <span class="cm"># new DHCP request now</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh sync force'   <span class="cm"># check, repair, retry the guard</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh log 100'
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh guardlog 100'
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh diag'   <span class="cm"># report</span>
+su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh help'   <span class="cm"># every command and setting</span></pre>
+  <p>Settings: <code>ENABLED</code>, <code>DHCP_HOSTNAME</code>, <code>DHCP_VENDOR</code>, <code>DHCP_PRL</code>, <code>BLOCK_MDNS</code>, <code>BLOCK_SSDP</code>, <code>BLOCK_LLMNR</code> (each <code>0</code> or <code>1</code>), <code>WIFI_IFACE</code> (<code>auto</code> or an interface name).</p>
+  <p>To see a request yourself, capture on the phone (for example from a Linux chroot): <code>tcpdump -i wlan0 -n -vvv 'udp port 67 or udp port 68'</code>, then Restart Wi-Fi. No <em>Hostname</em>, no <em>Vendor-Class</em>, and <em>Parameter-Request</em> with 9 entries.</p>
+</div>
+
+<div class="sec-title" id="trouble">10 · troubleshooting</div>
+<div class="box">
+  <h3>The router still shows the phone's name</h3>
+  <p>It remembers it from an earlier lease. Remove the phone in the router's device list, or wait until the lease ends. New requests carry no name (check Dashboard → Last request: <em>cleaned</em>).</p>
+  <h3>Casting, printing or "devices nearby" stopped</h3>
+  <p>That is mDNS (and SSDP for DLNA) being blocked - switch them off in Settings. See 5.</p>
+  <h3>"DHCP guard failed"</h3>
+  <p>The kernel refused the cleaner. The Log has the kernel's own report; send the Report. Announcements stay blocked meanwhile, and Wi-Fi works normally (only uncleaned).</p>
+  <h3>"Firewall rules repaired"</h3>
+  <p>Something removed or changed the module's rules; the watchdog put them back. Once now and then is harmless. If it repeats every few seconds, another module fights over the same rules - send the Report.</p>
+  <h3>Wi-Fi does not connect</h3>
+  <p>The cleaner never drops packets, so this is not expected. To rule the module out: Settings → LAN Cloak off (everything is removed at once), or disable it in the root manager - also at once, no reboot needed.</p>
+  <h3>Watchdog not running</h3>
+  <p>Reboot. If it stays stopped, the Log says why.</p>
+</div>
+
+<div class="sec-title" id="files">11 · files, update, uninstall</div>
+<div class="box">
+  <div class="tw"><table>
+    <tr><th>file</th><th></th></tr>
+    <tr><td>/data/adb/lan-cloak/</td><td>Everything the module keeps, in one folder:</td></tr>
+    <tr><td>settings.conf</td><td>Settings (kept on update)</td></tr>
+    <tr><td>logs/lan-cloak.log</td><td>Module log</td></tr>
+    <tr><td>logs/dhcp-guard.log</td><td>DHCP guard log (both are <strong>Clear</strong>-able in the Log tab and keep the last 1000 lines)</td></tr>
+    <tr><td>state/</td><td>Runtime state, cleared at boot; <code>state/status</code> can be read by other modules</td></tr>
+  </table></div>
+  <p><strong>Update:</strong> flash the new zip, reboot. Settings stay. The running version keeps working until the reboot.</p>
+  <p><strong>Disable</strong> in the root manager: the guard stops, the filter and the rules are removed at once. Enable again: back within 10 seconds.</p>
+  <p><strong>Uninstall:</strong> everything is removed, then the data folder is deleted.</p>
+</div>
+
+<div class="footer">LAN Cloak Arm64 · by Tears Burn · <a href="index.html">back to dashboard</a></div>
+
+<script>
+function goBack() { if (history.length > 1) history.back(); else location.href = 'index.html'; }
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+id=lan-cloak
+name=LAN Cloak Arm64
+version=1.0
+versionCode=1
+author=Tears Burn
+banner=lan-cloak.png
+description=Hides the phone on Wi-Fi networks: clean DHCP, no mDNS / SSDP / LLMNR announcements. Status: Init
+updateJson=https://raw.githubusercontent.com/nikakvo/lan-cloak-arm64/main/update.json

@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>LAN Cloak</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- Non-blocking font: the page must work with no internet at all -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" media="print" onload="this.media='all'">
+  <style>
+    /* Same house style as DNSCrypt Proxy Arm64, ipset-arm64, VPN Hotspot
+       Arm64 and WG Shield Arm64 (one set); this module's own colour is
+       magenta, warnings orange, errors red. Sibling rows keep their own
+       colours. Its own shape: viewfinder corners (what the network sees). */
+    :root {
+      --acc:    #ff3dd2;
+      --acc-a:  rgba(255,61,210,0.45);
+      --acc-t:  rgba(255,61,210,0.08);
+      --amber:  #ff6a1f;
+      --red:    #ff4d6a;
+      --dnsc:   #00ff88;
+      --ipset:  #00aaff;
+      --vhs:    #fcee0a;
+      --wgs:    #7dd3fc;
+      --border: #2a1a29;
+      --line:   #170d17;
+      --muted:  #8f8391;
+      --text:   #f3eaf2;
+      --dim:    #050305;
+      --panel:  #0a060a;
+      --mono:   'Share Tech Mono', ui-monospace, 'Roboto Mono', Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body { background: #000; font-family: var(--mono); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,61,210,0.018) 2px, rgba(255,61,210,0.018) 4px);
+    }
+    button, input { font-family: var(--mono); }
+    :focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; }
+
+    /* header */
+    header { padding: 6px 8px; padding-top: calc(env(safe-area-inset-top, 0px) + 6px); background: #070407; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+    .hdr-top { display: flex; align-items: baseline; gap: 8px; }
+    .htitle { font-size: clamp(11px, 3vw, 14px); color: var(--acc); letter-spacing: 1.5px; text-transform: uppercase; }
+    #hdr-ver { flex: 1; font-size: 9px; color: var(--muted); letter-spacing: .5px; }
+    #clock { font-size: 11px; color: var(--muted); white-space: nowrap; }
+    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .hbtn { display: block; padding: 7px 0; background: transparent; color: var(--acc); border: 1px solid var(--acc); text-decoration: none; font-size: clamp(9px, 2.8vw, 11px); letter-spacing: .5px; white-space: nowrap; text-transform: uppercase; text-align: center; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .hbtn:active { background: var(--acc); color: #000; }
+    .hbtn.alt { border-color: var(--muted); color: var(--muted); }
+    .hbtn.arm { background: rgba(255,106,31,.14); border-color: var(--amber); color: #fff; }
+
+    /* banner */
+    #busy-bar { position: relative; height: 2px; overflow: hidden; flex-shrink: 0; }
+    #busy-bar::after { content: ''; position: absolute; top: 0; bottom: 0; left: -40%; width: 40%; background: var(--acc); opacity: 0; }
+    #busy-bar.on::after { opacity: .9; animation: busySlide 1s linear infinite; }
+    @keyframes busySlide { from { left: -40%; } to { left: 100%; } }
+    #banner { padding: 4px 12px; font-size: 10px; letter-spacing: .4px; text-align: center; border-bottom: 1px solid var(--border); flex-shrink: 0; background: #1a0716; color: var(--acc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #banner.b-warn { background: #1f0c00; color: var(--amber); }
+    #banner.b-error { background: #1a0005; color: var(--red); }
+    #banner.b-idle { background: var(--dim); color: var(--muted); }
+    .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: middle; animation: livePulse 1.4s ease-in-out infinite; }
+    #banner.b-idle .live-dot, #banner.b-error .live-dot { animation: none; }
+    @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* viewfinder corners: this module's shape */
+    .vf { --vc: var(--border); position: relative; }
+    .vf::before { content: ''; position: absolute; inset: -1px; pointer-events: none;
+      background:
+        linear-gradient(var(--vc), var(--vc)) top left / 8px 2px, linear-gradient(var(--vc), var(--vc)) top left / 2px 8px,
+        linear-gradient(var(--vc), var(--vc)) bottom right / 8px 2px, linear-gradient(var(--vc), var(--vc)) bottom right / 2px 8px;
+      background-repeat: no-repeat; }
+
+    /* seen by the router: the one thing this page is about */
+    .seen { padding: 10px 12px 9px; border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0; }
+    .seen-t { display: flex; justify-content: space-between; align-items: baseline; font-size: 8.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 7px; }
+    .seen-t span:last-child { text-transform: none; letter-spacing: .3px; }
+    .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    @media (max-width: 420px) { .tiles { grid-template-columns: 1fr 1fr; } }
+    .tile { --vc: var(--border); border: 1px solid var(--border); padding: 6px 7px 7px; min-width: 0; }
+    .tile .l { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile .v { font-size: clamp(11px, 3.3vw, 14px); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+    .tile .s { font-size: 8px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile.hid { --vc: var(--acc); border-color: var(--acc-a); background: var(--acc-t); }
+    .tile.hid .v { color: var(--acc); }
+    .tile.shown { --vc: var(--amber); border-color: rgba(255,106,31,.45); }
+    .tile.shown .v { color: var(--amber); }
+    .tile.bad { --vc: var(--red); border-color: rgba(255,77,106,.45); }
+    .tile.bad .v { color: var(--red); }
+    .seen-f { margin-top: 7px; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .seen-f b { color: var(--text); font-weight: normal; }
+
+    /* stats */
+    .stats { display: flex; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .sc { flex: 1; padding: 6px 8px; background: var(--dim); display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .sc .lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sc .val { font-size: clamp(12px, 3.4vw, 18px); color: var(--acc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .val.a, .v.a { color: var(--amber) !important; } .val.r, .v.r { color: var(--red) !important; } .val.m, .v.m { color: var(--muted) !important; }
+
+    /* tabs / panes */
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: #050205; flex-shrink: 0; }
+    .tab { flex: 1; padding: 9px 0; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; cursor: pointer; }
+    .tab.active { color: var(--acc); border-bottom-color: var(--acc); }
+    .tab .tab-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-left: 5px; vertical-align: middle; }
+    .tab .tab-dot.bad { background: var(--red); } .tab .tab-dot.warn { background: var(--amber); }
+    main { flex: 1; min-height: 0; position: relative; }
+    .pane { position: absolute; inset: 0; overflow-y: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); display: none; -webkit-overflow-scrolling: touch; }
+    .pane.active { display: block; }
+    ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: var(--border); }
+
+    .section { border-bottom: 1px solid var(--border); padding: 12px 14px 14px; }
+    .section-title { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.4px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 7px; }
+    .section-title .s-accent { display: inline-block; width: 3px; height: 10px; border-radius: 1px; background: var(--acc); }
+    .section-title .s-note { margin-left: auto; text-transform: none; letter-spacing: .3px; font-size: 8px; }
+    .d-stat { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 10px; }
+    .d-stat:last-child { border-bottom: none; }
+    .d-stat .k { color: var(--muted); white-space: nowrap; }
+    .d-stat .v { color: var(--acc); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .d-stat .v.wrap { white-space: normal; overflow: visible; line-height: 1.5; }
+    .d-stat.hidden { display: none; }
+    .note { font-size: 9px; color: var(--muted); line-height: 1.6; margin-top: 8px; }
+    .note b { color: var(--text); font-weight: normal; }
+
+    .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 10px; }
+    .row:last-child { border-bottom: none; }
+    .row .rn { flex: 1; min-width: 0; }
+    .row .rn b { display: block; color: var(--text); font-weight: normal; font-size: 11px; }
+    .row .rn b em { font-style: normal; color: var(--muted); font-size: 9px; margin-left: 4px; }
+    .row .rn span { display: block; color: var(--muted); font-size: 9px; margin-top: 2px; line-height: 1.45; }
+    .row .rn span .w { color: var(--amber); }
+    .row.dimmed .rn, .row.dimmed .sw { opacity: .45; }
+    .pill { flex-shrink: 0; font-size: 8px; letter-spacing: .8px; padding: 2px 7px; border-radius: 2px; border: 1px solid; text-transform: uppercase; }
+    .pill.ok   { color: var(--acc);   border-color: var(--acc-a); background: var(--acc-t); }
+    .pill.warn { color: var(--amber); border-color: rgba(255,106,31,.45); background: rgba(255,106,31,.08); }
+    .pill.bad  { color: var(--red);   border-color: rgba(255,77,106,.45); background: rgba(255,77,106,.08); }
+    .pill.skip { color: var(--muted); border-color: var(--border); }
+    .pill.dnsc  { color: var(--dnsc);  border-color: rgba(0,255,136,.35); background: rgba(0,255,136,.06); }
+    .pill.ipset { color: var(--ipset); border-color: rgba(0,170,255,.4); background: rgba(0,170,255,.06); }
+    .pill.vhs   { color: var(--vhs);   border-color: rgba(252,238,10,.4); background: rgba(252,238,10,.06); }
+    .pill.wgs   { color: var(--wgs);   border-color: rgba(125,211,252,.45); background: rgba(125,211,252,.07); }
+    .sib { border-left: 2px solid; padding-left: 9px; }
+    .sib.dnsc { border-left-color: var(--dnsc); } .sib.ipset { border-left-color: var(--ipset); } .sib.vhs { border-left-color: var(--vhs); } .sib.wgs { border-left-color: var(--wgs); }
+    .sib.dnsc b { color: var(--dnsc) !important; } .sib.ipset b { color: var(--ipset) !important; } .sib.vhs b { color: var(--vhs) !important; } .sib.wgs b { color: var(--wgs) !important; }
+
+    /* blocked counters */
+    .counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .cnt { --vc: var(--border); border: 1px solid var(--border); padding: 6px 8px; min-width: 0; }
+    .cnt .l { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+    .cnt .n { font-size: clamp(14px, 4.2vw, 19px); color: var(--acc); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cnt.on { --vc: var(--acc); border-color: var(--acc-a); }
+    .cnt.off .n { color: var(--muted); font-size: 11px; padding: 4px 0 3px; }
+
+    /* buttons, switches, inputs */
+    .btn-s { background: var(--acc-t); border: 1px solid var(--acc-a); color: var(--acc); font-size: 10px; letter-spacing: .8px; text-transform: uppercase; padding: 8px 12px; cursor: pointer; white-space: nowrap; }
+    .btn-s.m { background: transparent; border-color: var(--border); color: var(--muted); }
+    .btn-s.arm { background: rgba(255,106,31,.14); border-color: var(--amber); color: #fff; }
+    .btn-s:disabled { opacity: .4; }
+    .sw { position: relative; width: 38px; height: 20px; flex-shrink: 0; }
+    .sw input { opacity: 0; width: 0; height: 0; }
+    .sw i { position: absolute; inset: 0; border: 1px solid var(--muted); border-radius: 10px; cursor: pointer; transition: .2s; }
+    .sw i::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; border-radius: 50%; background: var(--muted); transition: .2s; }
+    .sw input:checked + i { border-color: var(--acc-a); background: var(--acc-t); }
+    .sw input:checked + i::before { transform: translateX(18px); background: var(--acc); }
+    .sw input:focus-visible + i { outline: 1px solid var(--acc); outline-offset: 2px; }
+    .sw.busy { opacity: .4; pointer-events: none; }
+    .master { --vc: var(--acc); border: 1px solid var(--acc-a); background: var(--acc-t); padding: 4px 10px; }
+    .master.off { --vc: var(--border); border-color: var(--border); background: transparent; }
+    .seg { display: flex; margin-top: 8px; }
+    .seg button { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--text); font-size: 9px; padding: 8px 4px; margin-left: -1px; text-transform: uppercase; letter-spacing: .8px; cursor: pointer; }
+    .seg button:first-child { border-radius: 2px 0 0 2px; margin-left: 0; }
+    .seg button:last-child { border-radius: 0 2px 2px 0; }
+    .seg button.on { color: var(--acc); border-color: var(--acc-a); background: var(--acc-t); position: relative; z-index: 1; }
+    .inrow { display: flex; gap: 6px; margin-top: 8px; }
+    .inrow input { flex: 1; min-width: 0; background: #000; border: 1px solid var(--border); color: var(--text); font-size: 11px; padding: 8px; border-radius: 2px; }
+    .inrow.hidden { display: none; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .term { background: var(--panel); border: 1px solid var(--border); border-radius: 3px; padding: 8px 10px; font-size: 9px; color: var(--text); overflow: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.5; margin-top: 10px; max-height: 50vh; }
+    .term.hidden { display: none; }
+    .warnbox { border-left: 2px solid var(--amber); background: rgba(255,106,31,.07); padding: 8px 10px; font-size: 9px; color: var(--text); line-height: 1.6; margin-top: 8px; }
+    .warnbox b { color: var(--amber); font-weight: normal; }
+    .warnbox.hidden { display: none; }
+
+    /* log */
+    #tab-log { display: none; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+    #tab-log.active { display: flex; }
+    .log-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .fbtn { padding: 3px 7px; background: transparent; border: 1px solid var(--border); border-radius: 2px; font-size: 9px; color: var(--muted); cursor: pointer; }
+    .fbtn.src.on { color: var(--text); border-color: var(--muted); }
+    .fbtn.on.INFO { color: var(--acc); border-color: var(--acc-a); }
+    .fbtn.on.WARN { color: var(--amber); border-color: rgba(255,106,31,.45); }
+    .fbtn.on.ERROR { color: var(--red); border-color: rgba(255,77,106,.45); }
+    .fbtn.clr { margin-left: 4px; color: var(--muted); }
+    .fbtn.clr:not(.arm) { border-style: dashed; }
+    .fbtn.clr.arm { background: rgba(255,77,106,.14); color: #fff; border-color: var(--red); }
+    .lsep { width: 1px; height: 14px; background: var(--border); margin: 0 2px; }
+    #log-count { margin-left: auto; font-size: 9px; color: var(--muted); }
+    #log-body { flex: 1; min-height: 0; margin: 0; border: none; border-radius: 0; max-height: none; padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 36px); font-size: 9.5px; }
+    .ll { display: block; } .ll .t { color: var(--muted); }
+    .ll.INFO .m { color: var(--text); } .ll.WARN .m { color: var(--amber); } .ll.ERROR .m { color: var(--red); }
+
+    footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 4px 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px); background: var(--dim); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: var(--muted); gap: 6px; z-index: 100; }
+    #foot-info { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); transform: translateX(-50%) translateY(10px); opacity: 0; transition: all .25s; background: #120810; border: 1px solid var(--border); color: var(--text); font-size: 10px; padding: 8px 14px; border-radius: 3px; pointer-events: none; z-index: 200; max-width: 90vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok { border-color: var(--acc-a); color: var(--acc); } .toast.err { border-color: rgba(255,77,106,.5); color: var(--red); }
+    button { transition: transform .08s, filter .08s; }
+    button:active:not(:disabled) { transform: scale(.95); filter: brightness(1.5); }
+    button.working { animation: btnPulse .9s ease-in-out infinite; pointer-events: none; }
+    @keyframes btnPulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+    @media (prefers-reduced-motion: reduce) { .live-dot, #busy-bar.on::after, button.working { animation: none; } }
+    body.locked button:not(.tab):not(.fbtn:not(.clr)):not(.working), body.locked label.sw { opacity: .5; }
+    .fatal { margin: 30px 14px; padding: 16px; border: 1px solid rgba(255,77,106,.5); background: #1a0005; color: var(--red); font-size: 10px; line-height: 1.7; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-top">
+    <div class="htitle">▣ LAN Cloak</div>
+    <div id="hdr-ver"></div>
+    <div id="clock">--:--:--</div>
+  </div>
+  <div class="btn-grid">
+    <button class="hbtn vf" id="hdr-wifi" onclick="wifiRestart(this)">Restart Wi-Fi</button>
+    <a class="hbtn alt vf" href="help.html">Help</a>
+  </div>
+</header>
+
+<div id="busy-bar"></div>
+<div id="banner" class="b-idle"><span class="live-dot"></span>Connecting…</div>
+
+<div class="seen" aria-label="What the Wi-Fi network learns about the phone">
+  <div class="seen-t"><span>Seen by the router</span><span id="seen-if"></span></div>
+  <div class="tiles">
+    <div class="tile vf" id="ti-host"><div class="l">Device name</div><div class="v" id="tv-host">-</div><div class="s" id="ts-host">&nbsp;</div></div>
+    <div class="tile vf" id="ti-vend"><div class="l">Vendor</div><div class="v" id="tv-vend">-</div><div class="s" id="ts-vend">&nbsp;</div></div>
+    <div class="tile vf" id="ti-prl"><div class="l">Fingerprint</div><div class="v" id="tv-prl">-</div><div class="s" id="ts-prl">&nbsp;</div></div>
+    <div class="tile vf" id="ti-ann"><div class="l">Announcements</div><div class="v" id="tv-ann">-</div><div class="s" id="ts-ann">&nbsp;</div></div>
+  </div>
+  <div class="seen-f" id="seen-f">&nbsp;</div>
+</div>
+
+<div class="stats">
+  <div class="sc"><div class="lbl">State</div><div class="val" id="s-state">-</div></div>
+  <div class="sc"><div class="lbl">DHCP cleaned</div><div class="val" id="s-dhcp">-</div></div>
+  <div class="sc"><div class="lbl">Blocked</div><div class="val" id="s-blk">-</div></div>
+  <div class="sc"><div class="lbl">Wi-Fi</div><div class="val" id="s-wifi">-</div></div>
+</div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="dash" onclick="showTab('dash')">Dashboard<span class="tab-dot" id="dash-dot"></span></button>
+  <button class="tab" data-tab="set" onclick="showTab('set')">Settings</button>
+  <button class="tab" data-tab="log" onclick="showTab('log')">Log</button>
+</nav>
+
+<main>
+  <!-- ═════════════ DASHBOARD ═════════════ -->
+  <div class="pane active" id="tab-dash">
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>DHCP guard<span class="s-note" id="g-note"></span></div>
+      <div class="d-stat"><span class="k">Guard</span><span class="v" id="g-run">-</span></div>
+      <div class="d-stat"><span class="k">Cleaner on the interface</span><span class="v" id="g-att">-</span></div>
+      <div class="d-stat"><span class="k">Last request</span><span class="v" id="g-last">-</span></div>
+      <div class="d-stat"><span class="k">Requests seen / cleaned</span><span class="v" id="g-cnt">-</span></div>
+      <div class="d-stat"><span class="k">Removed</span><span class="v wrap" id="g-rem">-</span></div>
+      <div class="d-stat hidden" id="g-err-row"><span class="k">Error</span><span class="v wrap r" id="g-err">-</span></div>
+      <div class="note">Every DHCP request the phone sends on Wi-Fi is cleaned in the kernel on its way out. Counted since the guard started (boot, or LAN Cloak switched on).</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Announcements blocked<span class="s-note" id="a-note"></span></div>
+      <div class="counts">
+        <div class="cnt vf" id="c-mdns"><div class="l">mDNS</div><div class="n" id="n-mdns">-</div></div>
+        <div class="cnt vf" id="c-ssdp"><div class="l">SSDP</div><div class="n" id="n-ssdp">-</div></div>
+        <div class="cnt vf" id="c-llmnr"><div class="l">LLMNR</div><div class="n" id="n-llmnr">-</div></div>
+      </div>
+      <div class="note">Packets the phone tried to send to the local network and the firewall dropped, since the rules were last set (boot or a change of settings).</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Networking set</div>
+      <div id="set-body"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Watchdog</div>
+      <div class="d-stat"><span class="k">Running</span><span class="v" id="w-run">-</span></div>
+      <div class="d-stat"><span class="k">Last check</span><span class="v" id="w-tick">-</span></div>
+      <div class="d-stat"><span class="k">State since</span><span class="v" id="w-since">-</span></div>
+    </div>
+  </div>
+
+  <!-- ═════════════ SETTINGS ═════════════ -->
+  <div class="pane" id="tab-set">
+    <div class="section">
+      <div class="row master vf" id="row-en">
+        <div class="rn"><b>LAN Cloak</b><span>Everything below at once. Off: Wi-Fi works exactly as Android does it.</span></div>
+        <label class="sw"><input type="checkbox" id="cb-ENABLED" onchange="setKey(this, 'ENABLED')"><i></i></label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>DHCP<span class="s-note">what the phone asks the router</span></div>
+      <div class="row opt">
+        <div class="rn"><b>Hide the device name<em>12 · 81</em></b><span id="d-host">The router gets no name for the phone.</span></div>
+        <label class="sw"><input type="checkbox" id="cb-DHCP_HOSTNAME" onchange="setKey(this, 'DHCP_HOSTNAME')"><i></i></label>
+      </div>
+      <div class="row opt">
+        <div class="rn"><b>Hide the vendor class<em>60</em></b><span id="d-vend">The router does not learn that this is Android, or which version.</span></div>
+        <label class="sw"><input type="checkbox" id="cb-DHCP_VENDOR" onchange="setKey(this, 'DHCP_VENDOR')"><i></i></label>
+      </div>
+      <div class="row opt">
+        <div class="rn"><b>Generic request list<em>55</em></b><span>Asks for 9 common settings instead of Android's 12. Android's own list is a fingerprint on its own.</span></div>
+        <label class="sw"><input type="checkbox" id="cb-DHCP_PRL" onchange="setKey(this, 'DHCP_PRL')"><i></i></label>
+      </div>
+      <div class="note">Used from the next DHCP request: when Wi-Fi connects or the lease is renewed. <b>Restart Wi-Fi</b> (top) sends one now. The router may keep showing an old name until its lease ends.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Announcements<span class="s-note">what the phone tells the whole LAN</span></div>
+      <div class="row opt">
+        <div class="rn"><b>Block mDNS<em>5353</em></b><span>The phone stops announcing itself and its apps (HyperConnect, cast and media apps). <span class="w">Casting to a TV / Chromecast and finding devices nearby stop while this is on.</span></span></div>
+        <label class="sw"><input type="checkbox" id="cb-BLOCK_MDNS" onchange="setKey(this, 'BLOCK_MDNS')"><i></i></label>
+      </div>
+      <div class="row opt">
+        <div class="rn"><b>Block SSDP<em>1900</em></b><span>No UPnP / DLNA searches for TVs and media servers. <span class="w">DLNA casting stops while this is on.</span></span></div>
+        <label class="sw"><input type="checkbox" id="cb-BLOCK_SSDP" onchange="setKey(this, 'BLOCK_SSDP')"><i></i></label>
+      </div>
+      <div class="row opt">
+        <div class="rn"><b>Block LLMNR<em>5355</em></b><span>No name lookups shouted to every device on the network. Nothing common on Android needs them.</span></div>
+        <label class="sw"><input type="checkbox" id="cb-BLOCK_LLMNR" onchange="setKey(this, 'BLOCK_LLMNR')"><i></i></label>
+      </div>
+      <div class="note">Only on Wi-Fi. Hotspot devices, mobile data and the VPN tunnel are never touched.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Wi-Fi interface<span class="s-note" id="if-note"></span></div>
+      <div class="seg" id="if-seg">
+        <button data-m="auto" onclick="ifMode('auto')">Auto</button>
+        <button data-m="custom" onclick="ifMode('custom')">Custom</button>
+      </div>
+      <div class="inrow hidden" id="if-row">
+        <input id="if-in" maxlength="15" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="wlan0">
+        <button class="btn-s" onclick="ifSave()">Save</button>
+      </div>
+      <div class="note">Auto follows Android (it says which interface is Wi-Fi). Custom only if Android names it wrongly on your phone.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="s-accent"></span>Maintenance</div>
+      <div class="actions" style="grid-template-columns:1fr 1fr">
+        <button class="btn-s" onclick="doCheck()">Check now</button>
+        <button class="btn-s m" onclick="doDiag()">Report</button>
+      </div>
+      <div class="note">Check now: put the DHCP guard and the firewall rules in the wanted state at once (the watchdog does it every 10 s), and retry a guard that failed to start. Report: everything needed to troubleshoot, ready to copy.</div>
+      <pre class="term hidden" id="diag-out"></pre>
+      <div class="inrow hidden" id="diag-row"><button class="btn-s" style="flex:1" onclick="copyDiag()">Copy report</button></div>
+    </div>
+  </div>
+
+  <!-- ═════════════ LOG ═════════════ -->
+  <div class="pane" id="tab-log">
+    <div class="log-bar">
+      <button class="fbtn src on" data-s="log" onclick="logSrc(this)">Module</button>
+      <button class="fbtn src" data-s="guardlog" onclick="logSrc(this)">DHCP guard</button>
+      <span class="lsep"></span>
+      <button class="fbtn on INFO" data-l="INFO" onclick="toggleLvl(this)">Info</button>
+      <button class="fbtn on WARN" data-l="WARN" onclick="toggleLvl(this)">Warn</button>
+      <button class="fbtn on ERROR" data-l="ERROR" onclick="toggleLvl(this)">Error</button>
+      <span id="log-count"></span>
+      <button class="fbtn clr" id="log-clear" onclick="clearLog(this)">Clear</button>
+    </div>
+    <pre class="term" id="log-body"></pre>
+  </div>
+</main>
+
+<footer>
+  <span id="foot-l">-</span>
+  <span id="foot-info"></span>
+  <span id="foot-r"></span>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const MODDIR = '/data/adb/modules/lan-cloak';
+const CTL = 'sh ' + MODDIR + '/ctl.sh';
+
+// ── Root bridge (same contract as the other modules of the set) ─────────
+let EXEC_MODE = null, _cbSeq = 0;
+function hasBridge() { return typeof ksu !== 'undefined' && ksu && typeof ksu.exec === 'function'; }
+function callbackExec(cmd, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const name = '__lanc_cb_' + (++_cbSeq) + '_' + Date.now();
+    let settled = false;
+    window[name] = (errno, stdout, stderr) => {
+      if (settled) return; settled = true;
+      try { delete window[name]; } catch (e) { window[name] = undefined; }
+      resolve({ errno: typeof errno === 'number' ? errno : 0, stdout: stdout == null ? '' : String(stdout), stderr: stderr == null ? '' : String(stderr) });
+    };
+    try { ksu.exec(cmd, '{}', name); }
+    catch (e) { settled = true; try { delete window[name]; } catch (_) {} reject(e); return; }
+    setTimeout(() => { if (settled) return; settled = true; try { delete window[name]; } catch (_) {} reject(new Error('exec timeout')); }, timeoutMs || 30000);
+  });
+}
+function legacyExec(cmd) { const r = ksu.exec(cmd); return { errno: 0, stdout: typeof r === 'string' ? r : (r && r.stdout) || '', stderr: '' }; }
+// The callback form runs off the page's thread; the legacy one blocks the
+// whole page until the command ends. A slow first root shell (cold start)
+// must not push the page into legacy mode for good, so the callback form
+// gets two generous tries before falling back.
+async function detectExecMode() {
+  if (!hasBridge()) throw new Error('no root bridge');
+  for (const t of [8000, 15000]) {
+    try { const r = await callbackExec('echo lanc_ok', t); if ((r.stdout || '').indexOf('lanc_ok') >= 0) return 'callback'; }
+    catch (e) { if (!/timeout/.test(String(e && e.message))) break; }
+  }
+  try { const l = legacyExec('echo lanc_ok'); if ((l.stdout || '').indexOf('lanc_ok') >= 0) return 'legacy'; } catch (e) {}
+  throw new Error('root shell unavailable');
+}
+function b64ToText(b64) {
+  if (!b64) return '';
+  try { const bin = atob(b64); return new TextDecoder('utf-8').decode(Uint8Array.from(bin, c => c.charCodeAt(0))); } catch (e) { return ''; }
+}
+async function sh(cmd, timeoutMs) {
+  const wrapped = '{ ' + cmd + '; } 2>&1 | base64 | tr -d "\\n\\r"';
+  const res = EXEC_MODE === 'callback' ? await callbackExec(wrapped, timeoutMs) : legacyExec(wrapped);
+  return b64ToText((res.stdout || '').trim());
+}
+
+// ── One action at a time, with visible feedback ─────────────────────────
+let _pressed = null, _pressedAt = 0, _busyN = 0, _fgEndedAt = 0;
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('button'); if (b) { _pressed = b; _pressedAt = Date.now(); } }, true);
+const BG_CMD = /^(poll|log \d|guardlog \d)/;
+const LOCK_FREE = '.tab, .fbtn:not(.clr)';
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('button, label.sw, input[type=checkbox]');
+  if (!t || t.matches(LOCK_FREE)) return;
+  if (_busyN > 0 || e.timeStamp < _fgEndedAt) {
+    _pressed = null; e.preventDefault(); e.stopImmediatePropagation();
+    if (_busyN > 0) toast('Wait - the previous action is still running', 'err');
+  }
+}, true);
+async function ctl(args, timeoutMs) {
+  const fg = !BG_CMD.test(args);
+  let btn = null;
+  if (fg) {
+    if (_pressed && Date.now() - _pressedAt < 60000 && document.body.contains(_pressed)) btn = _pressed;
+    _pressed = null;
+    if (btn) btn.classList.add('working');
+    if (++_busyN === 1) { $('busy-bar').classList.add('on'); document.body.classList.add('locked'); }
+  }
+  try { return await sh(CTL + ' ' + args, timeoutMs); }
+  finally {
+    if (fg) {
+      if (btn) btn.classList.remove('working');
+      if (--_busyN <= 0) { _busyN = 0; $('busy-bar').classList.remove('on'); document.body.classList.remove('locked'); _fgEndedAt = performance.now(); }
+    }
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const num = v => { const n = parseInt(v, 10); return isNaN(n) ? 0 : n; };
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function q(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }   // shell single-quote
+function parseKV(text) {
+  const out = {};
+  (text || '').split('\n').forEach(line => {
+    const i = line.indexOf('=');
+    if (i <= 0) return;
+    out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  });
+  return out;
+}
+function fmtDur(sec) {
+  sec = num(sec); if (sec < 1) return '0s';
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  if (d) return `${d}d ${h}h`; if (h) return `${h}h ${m}m`; if (m) return `${m}m ${s}s`; return `${s}s`;
+}
+const fmtN = n => num(n).toLocaleString('en-US').replace(/,/g, ' ');
+let _toastTimer = null;
+function toast(msg, type) { const t = $('toast'); t.textContent = msg; t.className = 'toast show ' + (type || ''); clearTimeout(_toastTimer); _toastTimer = setTimeout(() => { t.className = 'toast'; }, 2600); }
+setInterval(() => { $('clock').textContent = new Date().toTimeString().slice(0, 8); }, 1000);
+function setText(id, txt, cls) { const e = $(id); e.textContent = txt; if (cls !== undefined) e.className = cls; }
+
+// two-tap confirm ("Sure?")
+function armed(b, label) {
+  if (b.classList.contains('arm')) { clearTimeout(b._t); b.classList.remove('arm'); b.textContent = b._label; return true; }
+  b._label = b.textContent; b.classList.add('arm'); b.textContent = label || 'Sure?';
+  b._t = setTimeout(() => { b.classList.remove('arm'); b.textContent = b._label; }, 3000);
+  return false;
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────────
+let currentTab = 'dash';
+function showTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+  if (name === 'log') loadLog();
+}
+
+// ── Render ──────────────────────────────────────────────────────────────
+let ST = {};
+function setBanner(cls, msg) { const b = $('banner'); b.className = cls; b.innerHTML = '<span class="live-dot"></span>' + msg; }
+const on = (st, k) => st['set_' + k] === '1';
+const active = st => st.state === 'on';
+// what is blocked right now (only while the rules are in place)
+function blockedList(st) {
+  const l = [];
+  if (st.block_mdns === '1') l.push('mDNS'); if (st.block_ssdp === '1') l.push('SSDP'); if (st.block_llmnr === '1') l.push('LLMNR');
+  return l;
+}
+const wifiUp = st => st.wifi === 'connected';
+
+function renderBanner(st) {
+  if (st.watchdog !== 'running') { setBanner('b-error', 'Watchdog not running - nothing is being kept in place. Reboot the phone.'); return; }
+  const ifc = esc(st.iface || 'wlan0'), bl = blockedList(st);
+  if (st.state === 'on') {
+    const d = st.dhcp === 'off' ? 'DHCP untouched' : 'DHCP clean';
+    const a = bl.length === 3 ? 'silent on the LAN' : bl.length ? bl.join(', ') + ' blocked' : 'announcements open';
+    if (!wifiUp(st)) setBanner('', `Cloak ready · Wi-Fi ${st.wifi === 'absent' ? 'off' : 'not connected'} · ${d} · ${a}`);
+    else setBanner('', `Cloaked on ${ifc} · ${d} · ${a}`);
+    return;
+  }
+  if (st.state === 'error') {
+    if (st.reason === 'dhcp') setBanner('b-error', 'DHCP guard failed' + (st.dhcp_error ? ': ' + esc(st.dhcp_error) : '') + (bl.length ? ' - announcements still blocked' : ''));
+    else setBanner('b-error', 'Firewall rules could not be set - see Log');
+    return;
+  }
+  if (st.state === 'off') {
+    if (st.reason === 'module-disabled') setBanner('b-idle', 'Disabled in the root manager · Wi-Fi as Android does it');
+    else if (st.reason === 'nothing-selected') setBanner('b-idle', 'Nothing selected · switch options on in Settings');
+    else setBanner('b-idle', 'Off · Wi-Fi as Android does it');
+    return;
+  }
+  setBanner('b-idle', 'Waiting for the watchdog…');
+}
+
+function tile(id, cls, v, s) {
+  $('ti-' + id).className = 'tile vf ' + cls;
+  $('tv-' + id).textContent = v;
+  $('ts-' + id).textContent = s || '\u00a0';
+}
+function renderSeen(st) {
+  const dh = st.dhcp === 'on' || st.dhcp === 'waiting';   // the guard is wanted and running / waiting for Wi-Fi
+  const dErr = st.dhcp === 'error';
+  const fl = num(st.dhcp_flags);
+  const name = st.android_hostname || '?', vend = st.android_vendor || 'android-dhcp';
+  if (dErr) {
+    tile('host', 'bad', name, 'guard failed - sent as is');
+    tile('vend', 'bad', vend, 'guard failed - sent as is');
+    tile('prl', 'bad', 'Android', 'guard failed - sent as is');
+  } else {
+    if (dh && fl & 1) tile('host', 'hid', 'hidden', 'not ' + name); else tile('host', 'shown', name, 'sent to the router');
+    if (dh && fl & 2) tile('vend', 'hid', 'hidden', 'not ' + vend); else tile('vend', 'shown', vend.replace(/^android-dhcp-/, 'Android '), 'sent as ' + vend);
+    if (dh && fl & 4) tile('prl', 'hid', 'generic', '9 common options'); else tile('prl', 'shown', 'Android', "Android's 12 options");
+  }
+  const bl = blockedList(st), all = ['mDNS', 'SSDP', 'LLMNR'], open = all.filter(x => !bl.includes(x));
+  if (st.announce === 'error') tile('ann', 'bad', 'not blocked', 'firewall rules failed');
+  else if (!open.length) tile('ann', 'hid', 'silent', 'mDNS, SSDP, LLMNR blocked');
+  else if (bl.length) tile('ann', 'shown', open.join(', '), 'open · ' + bl.join(', ') + ' blocked');
+  else tile('ann', 'shown', 'all open', 'mDNS, SSDP, LLMNR');
+  $('seen-if').textContent = st.iface ? st.iface + (wifiUp(st) ? '' : ' · not connected') : '';
+  // MAC / IP line: what the router sees anyway
+  const parts = [];
+  if (st.wifi_mac) parts.push('MAC <b>' + esc(st.wifi_mac) + '</b> ' + (st.wifi_mac_random === '1' ? '(randomized by Android)' : '(factory address)'));
+  if (st.wifi_ipv4) parts.push('IP <b>' + esc(st.wifi_ipv4.replace(/\/\d+$/, '')) + '</b>');
+  $('seen-f').innerHTML = parts.join(' · ') || (wifiUp(st) ? '&nbsp;' : 'Not connected to a Wi-Fi network.');
+}
+
+function renderStats(st) {
+  const lbl = { on: 'Cloaked', off: 'Off', error: 'Error' };
+  setText('s-state', lbl[st.state] || '-', 'val ' + ({ on: '', off: 'm', error: 'r' }[st.state] ?? 'm'));
+  if (st.dhcp === 'off' || !st.dhcp) setText('s-dhcp', 'off', 'val m');
+  else setText('s-dhcp', fmtN(st.dhcp_changed) + ' / ' + fmtN(st.dhcp_seen), 'val ' + (st.dhcp === 'error' ? 'r' : ''));
+  const blk = num(st.blocked_mdns) + num(st.blocked_ssdp) + num(st.blocked_llmnr);
+  if (st.announce !== 'on') setText('s-blk', st.announce === 'error' ? 'error' : 'off', 'val ' + (st.announce === 'error' ? 'r' : 'm'));
+  else setText('s-blk', fmtN(blk), 'val');
+  const w = { connected: 'connected', disconnected: 'not conn.', absent: 'off' }[st.wifi] || '-';
+  setText('s-wifi', w, 'val ' + (wifiUp(st) ? '' : 'm'));
+}
+
+function renderGuard(st) {
+  const off = st.dhcp === 'off' || !st.dhcp;
+  $('g-note').textContent = off ? (st.state === 'off' ? 'LAN Cloak is off' : 'no DHCP option selected') : (st.iface || '');
+  if (off) {
+    setText('g-run', 'off', 'v m'); setText('g-att', '-', 'v m'); setText('g-last', '-', 'v m'); setText('g-cnt', '-', 'v m'); setText('g-rem', '-', 'v wrap m');
+  } else {
+    const run = st.dhcp_guard === 'running';
+    setText('g-run', run ? 'running' + (st.dhcp_guard_pid ? ' · pid ' + st.dhcp_guard_pid : '') : 'NOT running', 'v ' + (run ? '' : 'r'));
+    const att = st.dhcp_attached === '1';
+    setText('g-att', att ? 'yes · ' + (st.iface || '') : (wifiUp(st) ? 'no - re-attaching' : 'waits for Wi-Fi'), 'v ' + (att ? '' : wifiUp(st) ? 'a' : 'm'));
+    if (st.dhcp_last_seen_at) {
+      const cleaned = st.dhcp_last_changed_at !== '' && st.dhcp_last_changed_at !== undefined && num(st.dhcp_last_changed_at) >= num(st.dhcp_last_seen_at);
+      setText('g-last', fmtDur(Math.max(0, num(st.now) - num(st.dhcp_last_seen_at))) + ' ago · ' + (cleaned ? 'cleaned' : 'nothing to remove'), 'v');
+    } else setText('g-last', 'none since boot', 'v m');
+    setText('g-cnt', fmtN(st.dhcp_seen) + ' / ' + fmtN(st.dhcp_changed) + (num(st.dhcp_skipped) ? ' · ' + fmtN(st.dhcp_skipped) + ' skipped' : ''), 'v ' + (num(st.dhcp_skipped) ? 'a' : ''));
+    const fl = num(st.dhcp_flags), rem = [];
+    if (fl & 1) rem.push('name ' + fmtN(st.dhcp_n_host) + '×');
+    if (fl & 2) rem.push('vendor ' + fmtN(st.dhcp_n_vendor) + '×');
+    if (fl & 4) rem.push('list shortened ' + fmtN(st.dhcp_n_prl) + '×');
+    setText('g-rem', rem.join(' · ') || '-', 'v wrap');
+  }
+  $('g-err-row').classList.toggle('hidden', !st.dhcp_error);
+  $('g-err').textContent = st.dhcp_error || '';
+}
+
+function cnt(id, isOn, n) {
+  $('c-' + id).className = 'cnt vf ' + (isOn ? 'on' : 'off');
+  $('n-' + id).textContent = isOn ? fmtN(n) : 'allowed';
+}
+function renderCounts(st) {
+  const a = st.announce === 'on';
+  cnt('mdns', a && st.block_mdns === '1', st.blocked_mdns);
+  cnt('ssdp', a && st.block_ssdp === '1', st.blocked_ssdp);
+  cnt('llmnr', a && st.block_llmnr === '1', st.blocked_llmnr);
+  $('a-note').textContent = st.announce === 'on' ? (st.announce_ipv6 === '1' ? 'IPv4 + IPv6' : 'IPv4 only') : st.announce === 'error' ? 'rules failed' : 'off';
+  $('a-note').className = 's-note ' + (st.announce === 'error' ? 'v r' : '');
+}
+
+function renderSet(st) {
+  const row = (cls, name, state, pill, txt) => {
+    const p = state === 'absent' ? '<span class="pill skip">not installed</span>' : state === 'disabled' ? '<span class="pill warn">disabled</span>' : pill;
+    return `<div class="row sib ${cls}"><div class="rn"><b>${name}</b><span>${txt}</span></div>${p}</div>`;
+  };
+  const wgUp = st.wgshield_state === 'up';
+  const wgTxt = st.wgshield === 'enabled'
+    ? (wgUp ? 'Internet traffic goes through ' + esc(st.wgshield_tunnel || 'the tunnel') + '. ' : 'Tunnel for internet traffic. ') + 'What the Wi-Fi network sees of the phone itself is LAN Cloak\'s part.'
+    : 'Puts internet traffic into a WireGuard tunnel. LAN Cloak covers the local network around it.';
+  const dnTxt = st.dnscrypt === 'enabled' ? 'Encrypted DNS: name lookups never reach the router in clear.' : 'Encrypted DNS. Without it, name lookups go to the router in clear.';
+  const html =
+    row('wgs', 'WG Shield', st.wgshield, `<span class="pill ${wgUp ? 'wgs' : 'skip'}">${esc(st.wgshield_state || 'unknown')}</span>`, wgTxt) +
+    row('dnsc', 'DNSCrypt Proxy', st.dnscrypt, `<span class="pill ${st.dnscrypt_state && !/down|failsafe|hung/.test(st.dnscrypt_state) ? 'dnsc' : 'warn'}">${esc(st.dnscrypt_state || 'unknown')}</span>`, dnTxt) +
+    row('vhs', 'VPN Hotspot', st.vpnhotspot, `<span class="pill ${st.vpnhotspot_state === 'vpn' ? 'vhs' : 'skip'}">${esc(st.vpnhotspot_state || 'idle')}</span>`, 'Hotspot interfaces are never touched by LAN Cloak: hotspot devices keep working as before.') +
+    row('ipset', 'ipset', st.ipset, '<span class="pill ipset">active</span>', 'IP blocklists. Independent of LAN Cloak.');
+  if ($('set-body')._h !== html) { $('set-body').innerHTML = html; $('set-body')._h = html; }
+}
+
+function renderWatch(st) {
+  const r = st.watchdog === 'running';
+  setText('w-run', r ? 'yes' : 'NO', 'v ' + (r ? '' : 'r'));
+  setText('w-tick', st.tick_age !== undefined && st.tick_age !== '' ? st.tick_age + ' s ago' : '-', 'v ' + (num(st.tick_age) > 60 ? 'a' : ''));
+  const since = num(st.since);
+  setText('w-since', since > 1577836800 ? fmtDur(num(st.now) - since) + ' · ' + (st.state || '') : '-', 'v');
+  $('hdr-ver').textContent = st.version ? 'v' + st.version : '';
+  $('foot-l').textContent = (st.version ? 'v' + st.version : '') + (EXEC_MODE === 'legacy' ? ' · sync' : '');
+  $('foot-info').textContent = st.iface ? 'Wi-Fi ' + st.iface : '';
+  $('dash-dot').className = 'tab-dot' + (st.state === 'error' || st.watchdog !== 'running' ? ' bad' : num(st.dhcp_skipped) ? ' warn' : '');
+}
+
+const SW_KEYS = ['ENABLED', 'DHCP_HOSTNAME', 'DHCP_VENDOR', 'DHCP_PRL', 'BLOCK_MDNS', 'BLOCK_SSDP', 'BLOCK_LLMNR'];
+function renderSettings(st) {
+  SW_KEYS.forEach(k => { const cb = $('cb-' + k); if (!cb.closest('.sw').classList.contains('busy')) cb.checked = on(st, k); });
+  const en = on(st, 'ENABLED');
+  $('row-en').className = 'row master vf' + (en ? '' : ' off');
+  document.querySelectorAll('.row.opt').forEach(r => r.classList.toggle('dimmed', !en));
+  if (st.android_hostname) $('d-host').textContent = 'The router gets no name for the phone (Android sends ' + st.android_hostname + ').';
+  if (st.android_vendor) $('d-vend').textContent = 'The router does not learn that this is Android, or which version (' + st.android_vendor + ').';
+  // interface
+  if (!_ifEditing) {
+    const m = st.set_WIFI_IFACE && st.set_WIFI_IFACE !== 'auto' ? 'custom' : 'auto';
+    IFMODE = m;
+    document.querySelectorAll('#if-seg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    $('if-row').classList.toggle('hidden', m !== 'custom');
+    if (m === 'custom' && document.activeElement !== $('if-in')) $('if-in').value = st.set_WIFI_IFACE;
+  }
+  $('if-note').textContent = st.iface ? 'now ' + st.iface : '';
+}
+
+function render(st) {
+  ST = st;
+  renderBanner(st); renderSeen(st); renderStats(st); renderGuard(st);
+  renderCounts(st); renderSet(st); renderWatch(st); renderSettings(st);
+}
+
+// ── Poll every 4 s ──────────────────────────────────────────────────────
+let _polling = false;
+async function poll() {
+  if (_polling || document.hidden) return;
+  _polling = true;
+  try {
+    const st = parseKV(await ctl('poll', 20000));
+    if (st.ok === '1') render(st);
+    else setBanner('b-error', 'The module did not answer: ' + esc(st.error || 'no output'));
+  } catch (e) { setBanner('b-error', 'No answer from the module: ' + esc(e.message)); }
+  finally { _polling = false; }
+}
+
+// ── Settings ────────────────────────────────────────────────────────────
+const KEY_NAME = { ENABLED: 'LAN Cloak', DHCP_HOSTNAME: 'Device name hidden', DHCP_VENDOR: 'Vendor class hidden', DHCP_PRL: 'Generic request list', BLOCK_MDNS: 'mDNS blocked', BLOCK_SSDP: 'SSDP blocked', BLOCK_LLMNR: 'LLMNR blocked' };
+async function setKey(cb, key) {
+  const sw = cb.closest('.sw'); sw.classList.add('busy');
+  try {
+    const r = parseKV(await ctl('set ' + key + ' ' + (cb.checked ? '1' : '0'), 30000));
+    if (r.ok !== '1') { toast(r.error || 'Not saved', 'err'); cb.checked = !cb.checked; }
+    else if (r.dhcp_error) toast('Saved - but the DHCP guard failed: ' + r.dhcp_error, 'err');
+    else if (r.announce === 'error') toast('Saved - but the firewall rules failed (see Log)', 'err');
+    else toast(KEY_NAME[key] + (key === 'ENABLED' ? (cb.checked ? ' on' : ' off') : cb.checked ? ': on' : ': off'), 'ok');
+  } finally { sw.classList.remove('busy'); await poll(); }
+}
+let IFMODE = 'auto', _ifEditing = false;
+async function ifMode(m) {
+  if (m === 'auto') {
+    _ifEditing = false;
+    if (ST.set_WIFI_IFACE === 'auto') { $('if-row').classList.add('hidden'); return; }
+    const r = parseKV(await ctl('set WIFI_IFACE auto', 30000));
+    toast(r.ok === '1' ? 'Wi-Fi interface: auto (' + (r.state === 'on' ? 'follows Android' : r.state) + ')' : (r.error || 'Not saved'), r.ok === '1' ? 'ok' : 'err');
+    await poll();
+  } else {
+    _ifEditing = true;
+    document.querySelectorAll('#if-seg button').forEach(b => b.classList.toggle('on', b.dataset.m === 'custom'));
+    $('if-row').classList.remove('hidden');
+    if (!$('if-in').value) $('if-in').value = ST.iface || 'wlan0';
+    $('if-in').focus();
+  }
+}
+async function ifSave() {
+  const v = $('if-in').value.trim();
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,14}$/.test(v)) { toast('Not an interface name (letters, digits, _ . -, at most 15)', 'err'); return; }
+  const r = parseKV(await ctl('set WIFI_IFACE ' + q(v), 30000));
+  _ifEditing = false;
+  toast(r.ok === '1' ? 'Wi-Fi interface: ' + v : (r.error || 'Not saved'), r.ok === '1' ? 'ok' : 'err');
+  await poll();
+}
+async function doCheck() {
+  const r = parseKV(await ctl('sync force', 30000));
+  toast(r.ok === '1' ? 'Checked: ' + ({ on: 'cloaked', off: 'off', error: 'error' }[r.state] || r.state || '?') : (r.error || 'Failed'), r.ok === '1' && r.state !== 'error' ? 'ok' : 'err');
+  await poll();
+}
+async function wifiRestart(b) {
+  if (!armed(b, 'Wi-Fi drops - sure?')) return;
+  toast('Wi-Fi off and on…', 'ok');
+  const r = parseKV(await ctl('wifi-restart', 30000));
+  toast(r.ok === '1' ? 'Wi-Fi restarted - a fresh DHCP request goes out when it connects' : (r.error || 'Failed'), r.ok === '1' ? 'ok' : 'err');
+  await poll();
+}
+async function doDiag() {
+  const t = await ctl('diag', 60000);
+  $('diag-out').textContent = t; $('diag-out').classList.remove('hidden'); $('diag-row').classList.remove('hidden');
+}
+function copyDiag() {
+  const t = $('diag-out').textContent;
+  const done = () => toast('Report copied', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done, () => fallbackCopy(t, done));
+  else fallbackCopy(t, done);
+}
+function fallbackCopy(t, done) {
+  const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed - select the text by hand', 'err'); }
+  ta.remove();
+}
+
+// ── Log (module log or the DHCP guard's own log) ────────────────────────
+const LVL = { INFO: true, WARN: true, ERROR: true };
+let LOGTXT = '', LOGSRC = 'log';
+function toggleLvl(b) { LVL[b.dataset.l] = !LVL[b.dataset.l]; b.classList.toggle('on', LVL[b.dataset.l]); drawLog(); }
+function logSrc(b) {
+  LOGSRC = b.dataset.s;
+  document.querySelectorAll('.fbtn.src').forEach(x => x.classList.toggle('on', x === b));
+  LOGTXT = ''; _logGen++; drawLog(); loadLog();
+}
+let _logGen = 0;   // a load that started before Clear / a switch must not bring the old lines back
+async function loadLog() { const g = _logGen; const t = await ctl(LOGSRC + ' 300', 15000); if (g !== _logGen) return; LOGTXT = t; drawLog(); }
+async function clearLog(b) {
+  if (!armed(b)) return;
+  _logGen++;
+  const r = parseKV(await ctl(LOGSRC + ' clear', 15000));
+  if (r.ok === '1') { _logGen++; await loadLog(); toast((LOGSRC === 'log' ? 'Module' : 'DHCP guard') + ' log cleared', 'ok'); }
+  else toast(r.error || 'Could not clear the log', 'err');
+}
+// module:  "<date> <time> [LEVEL] text" or "boot+12.34s [LEVEL] text"
+// guard:   "<date> <time.ms> text" or "boot+12.345s text" (ERROR lines start with ERROR)
+const RE_MOD = /^(boot\+\S+|\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[(\w+)\] (.*)$/;
+const RE_GRD = /^(boot\+\S+|\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(?:\.\d+)?) (.*)$/;
+function drawLog() {
+  const lines = LOGTXT.split('\n').filter(Boolean).reverse();
+  let shown = 0, total = 0;
+  const html = lines.map(l => {
+    let t, lv, msg, m;
+    if (LOGSRC === 'log') { m = RE_MOD.exec(l); if (!m) return ''; [t, lv, msg] = [m[1], m[2], m[3]]; }
+    else { m = RE_GRD.exec(l); if (!m) return ''; t = m[1]; msg = m[2]; lv = /^ERROR\b/.test(msg) ? 'ERROR' : 'INFO'; }
+    total++;
+    if (!LVL[lv]) return '';
+    shown++;
+    if (!t.startsWith('boot')) t = t.slice(5);
+    return `<span class="ll ${lv}"><span class="t">${esc(t)}</span> <span class="m">${esc(msg)}</span></span>`;
+  }).join('');
+  $('log-body').innerHTML = html || '<span class="ll"><span class="t">No entries.</span></span>';
+  $('log-count').textContent = shown + ' / ' + total;
+}
+
+// ── Start ───────────────────────────────────────────────────────────────
+(async function init() {
+  try { EXEC_MODE = await detectExecMode(); }
+  catch (e) {
+    document.querySelector('main').innerHTML = '<div class="fatal">This page needs root access through your root manager (KernelSU, SukiSU, APatch or Magisk WebUI).<br><br>' + esc(e.message) + '</div>';
+    setBanner('b-error', 'No root bridge'); return;
+  }
+  await poll();
+  setInterval(poll, 4000);
+  setInterval(() => { if (currentTab === 'log' && !document.hidden) loadLog(); }, 6000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+})();
+</script>
+</body>
+</html>
