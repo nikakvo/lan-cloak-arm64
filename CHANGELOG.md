@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0-r1
+
+* **WebUI opens quickly every time** - after closing and quickly reopening it, the page could wait several seconds before showing anything. The root manager sometimes drops the page's very first command; the page now asks again after a moment instead of waiting for the lost answer
+* README: new banner showing the five modules of the networking set
+
+---
+
 ## 1.0
 
 First release. Hides the phone from the Wi-Fi network it is connected to.

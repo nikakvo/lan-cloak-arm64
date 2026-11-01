@@ -1,8 +1,8 @@
-<p align="center"><img src="lan-cloak.png" alt="LAN Cloak Arm64"></p>
+<p align="center"><img src="readme-banner.png" alt="LAN Cloak Arm64"></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/ARM64-only-ff3dd2?style=flat-square" />
-  <img src="https://img.shields.io/badge/v1.0-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/v1.0--r1-blue?style=flat-square" />
   <img src="https://img.shields.io/badge/SukiSU%20%2F%20KernelSU%20%2F%20Magisk-compatible-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/DHCP%20cleaner-eBPF-ff3dd2?style=flat-square" />
   <img src="https://img.shields.io/badge/WebUI-built%20in-ff3dd2?style=flat-square" />

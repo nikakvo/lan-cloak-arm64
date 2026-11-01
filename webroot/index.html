@@ -409,12 +409,26 @@ function legacyExec(cmd) { const r = ksu.exec(cmd); return { errno: 0, stdout: t
 // whole page until the command ends. A slow first root shell (cold start)
 // must not push the page into legacy mode for good, so the callback form
 // gets two generous tries before falling back.
+// Which form of ksu.exec works. On a quick reopen the root manager can run
+// the page's first command before it has registered the new page, and that
+// answer never comes. So the check is asked again a moment later, several
+// times, and the first answer wins - instead of waiting seconds for a lost
+// one and then falling back to the slow form that blocks the page.
 async function detectExecMode() {
   if (!hasBridge()) throw new Error('no root bridge');
-  for (const t of [8000, 15000]) {
-    try { const r = await callbackExec('echo lanc_ok', t); if ((r.stdout || '').indexOf('lanc_ok') >= 0) return 'callback'; }
-    catch (e) { if (!/timeout/.test(String(e && e.message))) break; }
-  }
+  const viaCallback = await new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    const ask = () => {
+      if (done) return;
+      callbackExec('echo lanc_ok', 15000).then(
+        r => { if ((r.stdout || '').indexOf('lanc_ok') >= 0) finish(true); },
+        e => { if (!/timeout/.test(String(e && e.message))) finish(false); });
+    };
+    [0, 400, 1000, 2000, 3500, 6000].forEach(t => setTimeout(ask, t));
+    setTimeout(() => finish(false), 16000);
+  });
+  if (viaCallback) return 'callback';
   try { const l = legacyExec('echo lanc_ok'); if ((l.stdout || '').indexOf('lanc_ok') >= 0) return 'legacy'; } catch (e) {}
   throw new Error('root shell unavailable');
 }
