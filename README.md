@@ -61,7 +61,7 @@ tc egress on wlan0: lan_cloak_dhcp (eBPF)      iptables OUTPUT -o wlan0 → LANC
 
 **Announcements.** One jump per family at the end of `OUTPUT`, only for the Wi-Fi interface; the chains only drop, never accept, so nothing of Android's or the sibling modules' rules is skipped.
 
-**Watchdog.** Every 10 s (2 s in the first 2 minutes after boot): the guard runs with the right settings on the right interface, the rules are complete. Anything off is put back and logged.
+**Watchdog.** Every 20 s (2 s in the first 2 minutes after boot): the guard runs with the right settings on the right interface, the rules are complete. Anything off is put back and logged.
 
 ---
 

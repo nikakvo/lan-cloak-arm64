@@ -16,21 +16,35 @@ dhcp_flags_wanted() { # needs conf_load
 }
 
 # pid of the running guard (empty when none). The pid file alone is not
-# trusted: the process must still be "lanc-bpf watch".
-guard_pid() {
-  _gp=""
+# trusted: the process must still be lanc-bpf (/proc/<pid>/comm). The
+# "watch" in its command line is checked once per pid (guard_iface).
+guard_pid() { guard_pid_get && echo "$G_PID"; }
+guard_pid_get() { # -> G_PID (no subshell, no tool)
+  G_PID=""; _gp=""
   read -r _gp 2>/dev/null < "$GUARD_PIDFILE"
   case "$_gp" in '' | *[!0-9]*) unset _gp; return 1 ;; esac
-  if kill -0 "$_gp" 2>/dev/null && tr '\0' ' ' < "/proc/$_gp/cmdline" 2>/dev/null | grep -q 'lanc-bpf watch '; then
-    echo "$_gp"; unset _gp; return 0
+  _gc=""; read -r _gc 2>/dev/null < "/proc/$_gp/comm"
+  if [ "$_gc" = lanc-bpf ] && kill -0 "$_gp" 2>/dev/null && guard_iface_get "$_gp"; then
+    G_PID=$_gp; unset _gp _gc; return 0
   fi
-  unset _gp
+  unset _gp _gc
   return 1
 }
 
 # Interface the running guard watches (argument 3 of its command line)
 guard_iface() { # <pid>
   tr '\0' '\n' < "/proc/$1/cmdline" 2>/dev/null | sed -n 3p
+}
+# Same, read once per guard pid (a pid's command line never changes) ->
+# G_IFACE. Fails when the process is not "lanc-bpf watch <iface> ...".
+guard_iface_get() { # <pid>
+  if [ "$1" != "$_GI_PID" ]; then
+    _GI_IF=""; _GI_PID=""
+    _gl=$(tr '\0' '\n' < "/proc/$1/cmdline" 2>/dev/null | sed -n '2{/^watch$/!q;};3p')
+    [ -n "$_gl" ] || { unset _gl; return 1; }
+    _GI_IF=$_gl; _GI_PID=$1; unset _gl
+  fi
+  G_IFACE=$_GI_IF
 }
 
 # guard_start <iface> <flags> -> 0 ok; sets G_ERR on failure
@@ -95,7 +109,9 @@ dhcp_flags_text() { # <flags> -> "host name, vendor class, request list"
 }
 
 # Read "lanc-bpf status <iface>" into B_* variables.
+# Done once per pass: B_DONE = the interface read (lanc_sync clears it).
 guard_read() { # <iface>
+  B_DONE=""
   B_ATTACHED=0; B_FLAGS=""; B_SEEN=0; B_CHANGED=0; B_SKIPPED=0; B_HOST=0; B_VENDOR=0; B_PRL=0
   B_LAST_SEEN=""; B_LAST_CHANGED=""; B_PROG=""
   [ -x "$BPF" ] || return 1
@@ -121,6 +137,7 @@ guard_read() { # <iface>
   done
   IFS=$_gifs
   unset _gs _k _v _gl _gifs
+  B_DONE=$1
   return 0
 }
 
@@ -128,11 +145,12 @@ guard_read() { # <iface>
 # with the right flags. Sets D_STATE (on | off | waiting | error), D_IFACE,
 # D_FLAGS, D_ERR. [force] = retry a failed start now.
 dhcp_sync() {
-  D_IFACE=$(wifi_iface)
-  D_FLAGS=$(dhcp_flags_wanted)
+  D_IFACE=$W_IF
+  D_FLAGS=0
+  [ "$S_ENABLED" = 1 ] && D_FLAGS=$(( S_DHCP_HOSTNAME * 1 + S_DHCP_VENDOR * 2 + S_DHCP_PRL * 4 ))
   D_ERR=""
   module_off && D_FLAGS=0
-  _dp=$(guard_pid)
+  guard_pid_get; _dp=$G_PID
 
   if [ "$D_FLAGS" = 0 ]; then
     [ -n "$_dp" ] && guard_stop
@@ -141,7 +159,7 @@ dhcp_sync() {
       guard_read "$D_IFACE" && [ "$B_ATTACHED" = 1 ] && "$BPF" detach "$D_IFACE" >/dev/null 2>&1 &&
         log_info "removed a leftover DHCP filter from $D_IFACE"
     }
-    rm -f "$GUARD_FAIL"
+    [ -f "$GUARD_FAIL" ] && rm -f "$GUARD_FAIL"
     D_STATE=off
     unset _dp
     return 0
@@ -149,7 +167,7 @@ dhcp_sync() {
 
   # interface changed (setting or wifi.interface): move the guard
   if [ -n "$_dp" ]; then
-    _di=$(guard_iface "$_dp")
+    _di=$G_IFACE
     if [ "$_di" != "$D_IFACE" ]; then
       log_info "Wi-Fi interface is now $D_IFACE (was $_di) - moving the DHCP guard"
       guard_stop "$_di"
@@ -160,7 +178,7 @@ dhcp_sync() {
   if [ -z "$_dp" ]; then
     _df=""; _dfe=""
     read -r _df _dfe 2>/dev/null < "$GUARD_FAIL"
-    if [ -n "$_df" ] && [ "$1" != force ] && [ $(( $(date +%s) - _df )) -lt "$GUARD_RETRY" ]; then
+    if [ -n "$_df" ] && [ "$1" != force ] && [ $(( ${P_NOW:-$(date +%s)} - _df )) -lt "$GUARD_RETRY" ]; then
       D_STATE=error; D_ERR=$_dfe
       unset _dp _di _df _dfe
       return 1

@@ -12,14 +12,15 @@ MODDIR="${LANC_MODDIR:-${0%/*}}"
 
 fail() { echo "ok=0"; echo "error=$*"; exit 1; }
 
-[ "$(id -u)" = 0 ] || fail "run as root: su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh $*'"
-mkdir -p "$STATE_DIR" "$LOGS_DIR" 2>/dev/null
+# mksh (the WebUI's shell) knows its uid without running "id"
+[ "${USER_ID:-$(id -u)}" = 0 ] || fail "run as root: su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh $*'"
+[ -d "$STATE_DIR" ] && [ -d "$LOGS_DIR" ] || mkdir -p "$STATE_DIR" "$LOGS_DIR" 2>/dev/null
 
-_watchdog_rows() {
-  _wp=$(wd_pid)
-  echo "watchdog=$([ -n "$_wp" ] && echo running || echo stopped)"
+_watchdog_rows() { # [now]
+  _wp=""; read -r _wp 2>/dev/null < "$WD_PIDFILE"
+  if [ -n "$_wp" ] && kill -0 "$_wp" 2>/dev/null; then echo "watchdog=running"; else echo "watchdog=stopped"; fi
   _tk=""; read -r _tk 2>/dev/null < "$TICK_FILE"
-  if [ -n "$_tk" ]; then echo "tick_age=$(( $(date +%s) - _tk ))"; else echo "tick_age="; fi
+  if [ -n "$_tk" ]; then echo "tick_age=$(( ${1:-$(date +%s)} - _tk ))"; else echo "tick_age="; fi
   _since=""; read -r _since _ss 2>/dev/null < "$SINCE_FILE"
   echo "since=$_since"
   unset _wp _tk _since _ss
@@ -27,20 +28,23 @@ _watchdog_rows() {
 
 # The set: installed / disabled / absent, plus each one's own state from
 # its status file (new path first, then the old one).
-_sib_val() { # <key> <file> [old file]
+_sib_val() { # <key> <file> [old file] -> KV
   _sf=$2; [ -f "$_sf" ] || _sf=${3:-$2}
-  sed -n "s/^$1=//p" "$_sf" 2>/dev/null | head -n 1
+  kv_get "$_sf" "$1"
   unset _sf
 }
+# (no subshell per value: the WebUI polls this every few seconds)
 _sibling_rows() {
-  echo "dnscrypt=$(sibling_state dnscrypt-proxy-android)"
-  echo "dnscrypt_state=$(_sib_val state "$ADB/dnscrypt-proxy/state/health" "$ADB/dnscrypt-proxy-state/health")"
-  echo "wgshield=$(sibling_state wg-shield)"
-  echo "wgshield_state=$(_sib_val state "$ADB/wg-shield/state/status" "$ADB/wg-shield-state/status")"
-  echo "wgshield_tunnel=$(_sib_val tunnel "$ADB/wg-shield/state/status" "$ADB/wg-shield-state/status")"
-  echo "vpnhotspot=$(sibling_state vpn-hotspot)"
-  echo "vpnhotspot_state=$(_sib_val state "$ADB/vpn-hotspot/state/status" "$ADB/vpn-hotspot-state/status")"
-  echo "ipset=$(sibling_state ipset_arm64 ipset-arm64)"
+  _wf="$ADB/wg-shield/state/status"; _wo="$ADB/wg-shield-state/status"
+  sibling_state_get dnscrypt-proxy-android; echo "dnscrypt=$SIB"
+  _sib_val state "$ADB/dnscrypt-proxy/state/health" "$ADB/dnscrypt-proxy-state/health"; echo "dnscrypt_state=$KV"
+  sibling_state_get wg-shield; echo "wgshield=$SIB"
+  _sib_val state "$_wf" "$_wo"; echo "wgshield_state=$KV"
+  _sib_val tunnel "$_wf" "$_wo"; echo "wgshield_tunnel=$KV"
+  sibling_state_get vpn-hotspot; echo "vpnhotspot=$SIB"
+  _sib_val state "$ADB/vpn-hotspot/state/status" "$ADB/vpn-hotspot-state/status"; echo "vpnhotspot_state=$KV"
+  sibling_state_get ipset_arm64 ipset-arm64; echo "ipset=$SIB"
+  unset _wf _wo
 }
 
 # Fresh pass (checks the tables, the guard), then everything as key=value.
@@ -48,8 +52,8 @@ cmd_status() {
   lanc_lock; lanc_sync; lanc_unlock
   echo "ok=1"
   cat "$STATUS_FILE" 2>/dev/null
-  for _k in $SETTINGS_KEYS; do echo "set_$_k=$(conf_get "$_k")"; done
-  _watchdog_rows
+  for _k in $SETTINGS_KEYS; do eval "echo \"set_$_k=\$S_$_k\""; done
+  _watchdog_rows "$P_NOW"
   _sibling_rows
   unset _k
 }
@@ -61,8 +65,9 @@ cmd_poll() {
   cat "$STATUS_FILE" 2>/dev/null
   conf_load
   for _k in $SETTINGS_KEYS; do eval "echo \"set_$_k=\$S_$_k\""; done
-  echo "now=$(date +%s)"
-  _watchdog_rows
+  _now=$(date +%s)
+  echo "now=$_now"
+  _watchdog_rows "$_now"
   _sibling_rows
   unset _k
 }

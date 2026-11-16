@@ -8,11 +8,14 @@
 #   LLMNR  224.0.0.252 / ff02::1:3 (and any multicast) udp 5355   (name lookups)
 # plus the unicast answers the phone would send from those ports.
 #
-# filter OUTPUT gets ONE jump per family, APPENDED (after everything netd and
-# the sibling modules put there) and only for the Wi-Fi interface:
+# filter OUTPUT gets ONE jump per family, APPENDED and only for the Wi-Fi
+# interface:
 #   -A OUTPUT -o wlan0 -j LANC_OUT     /    -A OUTPUT -o wlan0 -j LANC_OUT6
-# The chains only DROP; they never ACCEPT, so nothing of anyone else's is
-# skipped. Hotspot interfaces and mobile data are not matched.
+# It is set at post-fs-data, so on a phone it ends up AFTER the chains that
+# were there by then (the sibling modules) and BEFORE the ones netd appends
+# later (oem_out, fw_OUTPUT, bw_OUTPUT ...). Either order is fine: the
+# chains only DROP and never ACCEPT, so nothing of anyone else's is skipped.
+# Hotspot interfaces and mobile data are not matched.
 # Needs sh/common.sh.
 
 # Expected chain contents, exactly as iptables-save prints them (the check
@@ -50,6 +53,15 @@ announce_rules6() {
   fi
 }
 
+# _ann_expect: A_E4 / A_E6 = the expected chains (newline-separated), built
+# once per settings combination (needs conf_load).
+_ann_expect() {
+  _ek="$S_BLOCK_MDNS$S_BLOCK_SSDP$S_BLOCK_LLMNR"
+  [ "$_ek" = "$_A_EKEY" ] && { unset _ek; return 0; }
+  A_E4=$(announce_rules4); A_E6=$(announce_rules6); _A_EKEY=$_ek
+  unset _ek
+}
+
 # Is anything to block at all? (needs conf_load)
 announce_wanted() {
   [ "$S_ENABLED" = 1 ] || return 1
@@ -57,20 +69,40 @@ announce_wanted() {
   [ "$S_BLOCK_MDNS" = 1 ] || [ "$S_BLOCK_SSDP" = 1 ] || [ "$S_BLOCK_LLMNR" = 1 ]
 }
 
-# _ann_check <4|6> <dump> <chain> <iface> <expected rules>
-# -> "" when everything is in place, else a short reason
+# _ann_check <dump> <chain> <iface> <expected rules>
+# -> A_CHK = "" when everything is in place, else a short reason. Adds the
+# chain's "#C" packet counts to A_N_*. One pass over the (short, see
+# ipt_chain) dump in the shell itself: no tool, no subshell.
 _ann_check() {
-  _cd=$2; _cc=$3; _ci=$4; _ce=$5
-  _have=$(printf '%s\n' "$_cd" | grep -e "^-A $_cc " || true)
-  if ! printf '%s\n' "$_cd" | grep -qx -e "-N $_cc"; then echo "chain $_cc missing"
-  elif [ "$_have" != "$_ce" ]; then echo "chain $_cc changed"
-  else
-    _jn=$(printf '%s\n' "$_cd" | grep -c -e "^-A OUTPUT .*-j $_cc\$")
-    if [ "$_jn" != 1 ]; then echo "jump to $_cc: $_jn"
-    elif ! printf '%s\n' "$_cd" | grep -qx -e "-A OUTPUT -o $_ci -j $_cc"; then echo "jump to $_cc: wrong interface"
-    fi
+  _cn=0; _have=""; _jn=0; _jok=0
+  _cifs=$IFS; IFS=$NL
+  set -f
+  for _cl in $1; do
+    case "$_cl" in
+      "-N $2") _cn=1 ;;
+      "-A $2 "*) _have="${_have:+$_have$NL}$_cl" ;;
+      "-A OUTPUT "*"-j $2")
+        _jn=$((_jn + 1))
+        [ "$_cl" = "-A OUTPUT -o $3 -j $2" ] && _jok=1 ;;
+      "#C "*)
+        _cp=${_cl#"#C "}; _cv=${_cp%% *}
+        case "$_cv" in '' | *[!0-9]*) continue ;; esac
+        case "${_cp#* }" in
+          5353) A_N_MDNS=$((A_N_MDNS + _cv)) ;;
+          1900) A_N_SSDP=$((A_N_SSDP + _cv)) ;;
+          5355) A_N_LLMNR=$((A_N_LLMNR + _cv)) ;;
+        esac ;;
+    esac
+  done
+  set +f
+  IFS=$_cifs
+  if [ "$_cn" != 1 ]; then A_CHK="chain $2 missing"
+  elif [ "$_have" != "$4" ]; then A_CHK="chain $2 changed"
+  elif [ "$_jn" != 1 ]; then A_CHK="jump to $2: $_jn"
+  elif [ "$_jok" != 1 ]; then A_CHK="jump to $2: wrong interface"
+  else A_CHK=""
   fi
-  unset _cd _cc _ci _ce _have _jn
+  unset _cn _have _jn _jok _cifs _cl _cp _cv
 }
 
 # _ann_apply <4|6> <dump> <chain> <iface> <expected rules>
@@ -121,13 +153,33 @@ _ann_remove() { # <4|6> <dump> <chain>
 }
 
 # announce_sync: rules exactly as the settings say. Sets A_STATE
-# (on | off | error), A_V6 (1 = IPv6 rules too), A_PROBLEM (what was repaired).
+# (on | off | error | keep), A_V6 (1 = IPv6 rules too), A_PROBLEM (what was
+# repaired), A_N_* (blocked packets: iptables counters, from ipt_chain's
+# "#C <packets> <port>" lines; since the rules were set, so a boot or a
+# settings change starts again at 0).
+#
+# A table that cannot be READ says nothing about the rules: it happens in
+# the last second of a shutdown (iptables-save fails before sys.powerctl
+# is set). Then A_STATE=keep - this pass changes nothing and reports
+# nothing (lanc_sync keeps the last status). Only the second failed read in
+# a row in the same process (the watchdog: 20 s later) is an error - so the
+# status is never older than the 60 s after which the siblings call it stale.
 announce_sync() {
   A_PROBLEM=""; A_V6=0; A_N_MDNS=0; A_N_SSDP=0; A_N_LLMNR=0
-  _sif=$(wifi_iface)
-  _d4=$(ipt_dump 4 filter) || { A_STATE=error; A_PROBLEM="cannot read iptables"; unset _sif _d4; return 1; }
+  _sif=$W_IF
+  if ! ipt_chain 4 "$C_OUT"; then
+    _A_RF=$(( ${_A_RF:-0} + 1 ))
+    if [ "$_A_RF" -ge 2 ] && ! shutting_down_any; then
+      A_STATE=error; A_PROBLEM="cannot read iptables"
+      [ "$_A_RF" = 2 ] && log_error "cannot read the firewall tables (iptables-save failed twice in a row)"
+      unset _sif; return 1
+    fi
+    A_STATE=keep; unset _sif; return 0
+  fi
+  _A_RF=0
+  _d4=$IPC
   _d6=""; _v6=0
-  if [ -n "$IPT6_BIN" ] && _d6=$(ipt_dump 6 filter); then _v6=1; fi
+  if [ -n "$IPT6_BIN" ] && ipt_chain 6 "$C_OUT6"; then _d6=$IPC; _v6=1; fi
 
   if ! announce_wanted; then
     case "$_d4" in *"$C_OUT"*) _ann_remove 4 "$_d4" "$C_OUT"; log_info "announcement blocking removed" ;; esac
@@ -138,49 +190,26 @@ announce_sync() {
   fi
 
   A_STATE=on
-  _ann_count "$_d4"
-  [ "$_v6" = 1 ] && _ann_count "$_d6"
-  _e4=$(announce_rules4)
-  _p4=$(_ann_check 4 "$_d4" "$C_OUT" "$_sif" "$_e4")
-  if [ -n "$_p4" ]; then
-    A_PROBLEM=$_p4
-    if ! _ann_apply 4 "$_d4" "$C_OUT" "$_sif" "$_e4"; then
-      A_STATE=error; log_error "could not set the IPv4 announcement rules ($_p4)"
+  _ann_expect
+  _ann_check "$_d4" "$C_OUT" "$_sif" "$A_E4"
+  if [ -n "$A_CHK" ]; then
+    A_PROBLEM=$A_CHK
+    if ! _ann_apply 4 "$_d4" "$C_OUT" "$_sif" "$A_E4"; then
+      A_STATE=error; log_error "could not set the IPv4 announcement rules ($A_CHK)"
     fi
   fi
   if [ "$_v6" = 1 ]; then
     A_V6=1
-    _e6=$(announce_rules6)
-    _p6=$(_ann_check 6 "$_d6" "$C_OUT6" "$_sif" "$_e6")
-    if [ -n "$_p6" ]; then
-      A_PROBLEM="${A_PROBLEM:+$A_PROBLEM, }$_p6"
-      if ! _ann_apply 6 "$_d6" "$C_OUT6" "$_sif" "$_e6"; then
-        A_STATE=error; log_error "could not set the IPv6 announcement rules ($_p6)"
+    _ann_check "$_d6" "$C_OUT6" "$_sif" "$A_E6"
+    if [ -n "$A_CHK" ]; then
+      A_PROBLEM="${A_PROBLEM:+$A_PROBLEM, }$A_CHK"
+      if ! _ann_apply 6 "$_d6" "$C_OUT6" "$_sif" "$A_E6"; then
+        A_STATE=error; log_error "could not set the IPv6 announcement rules ($A_CHK)"
       fi
     fi
   fi
-  unset _sif _d4 _d6 _v6 _e4 _e6 _p4 _p6
+  unset _sif _d4 _d6 _v6
   [ "$A_STATE" != error ]
-}
-
-# Packets the rules dropped (iptables counters, from ipt_dump's "#C
-# <packets> <port>" lines). Since the rules were set: a boot or a settings
-# change starts again at 0.
-_ann_count() { # <dump>
-  _cls=$(printf '%s\n' "$1" | sed -n 's/^#C \([0-9][0-9]* [0-9][0-9]*\)$/\1/p')
-  _cifs=$IFS; IFS='
-'
-  for _cl in $_cls; do
-    _cn=${_cl%% *}
-    case "$_cn" in '' | *[!0-9]*) continue ;; esac
-    case "${_cl#* }" in
-      5353) A_N_MDNS=$((A_N_MDNS + _cn)) ;;
-      1900) A_N_SSDP=$((A_N_SSDP + _cn)) ;;
-      5355) A_N_LLMNR=$((A_N_LLMNR + _cn)) ;;
-    esac
-  done
-  IFS=$_cifs
-  unset _cifs _cl _cn _cls
 }
 
 announce_teardown() {
@@ -190,11 +219,12 @@ announce_teardown() {
 }
 
 # What is blocked, for the log / status
-announce_text() { # needs conf_load
+announce_text() { announce_text_get; echo "$A_TEXT"; }
+announce_text_get() { # -> A_TEXT (needs conf_load)
   _tx=""
   [ "$S_BLOCK_MDNS" = 1 ] && _tx="mDNS"
   [ "$S_BLOCK_SSDP" = 1 ] && _tx="${_tx:+$_tx, }SSDP"
   [ "$S_BLOCK_LLMNR" = 1 ] && _tx="${_tx:+$_tx, }LLMNR"
-  echo "${_tx:-nothing}"
+  A_TEXT=${_tx:-nothing}
   unset _tx
 }

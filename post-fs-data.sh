@@ -15,6 +15,11 @@ chmod 700 "$DATA_DIR" 2>/dev/null
 rm -rf "$LOCK_DIR"
 rm -f "$WD_PIDFILE" "$TICK_FILE" "$STATUS_FILE" "$SINCE_FILE" "$GUARD_PIDFILE" "$GUARD_FAIL" \
       "$IPT_WAIT_FILE" "$IPTR_WAIT_FILE" "$STATE_DIR/applied" "$TZ_FILE" "$STATE_DIR/devname"
+# temp files of a writer killed between write and rename (at a shutdown):
+# a new boot has new pids, so nothing else would ever remove them
+rm -f "$STATUS_FILE".tmp.* "$MODPROP".tmp.* "$CONF.tmp" 2>/dev/null
+# 1.0-r1 and older wrote everything with umask 0 (0666)
+chmod 0644 "$MODPROP" "$CONF" "$LOG" "$GUARD_LOG" 2>/dev/null
 conf_init
 log_trim
 log_trim "$GUARD_LOG"

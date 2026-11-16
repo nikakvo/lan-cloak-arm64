@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0-r2
+
+* **Uses far less CPU** - the watchdog now does its check every 20 seconds instead of 10 and starts about a tenth of the programs per check. Measured on the phone: from 1.3-2.3 % of one CPU core down to about 0.7 % before the longer interval. The WebUI also answers about three times faster
+* **No false "Firewall rules failed" at shutdown** - in the last second before a restart the firewall cannot be read; this is no longer reported as an error in the log, the module description and the status the other modules of the set show
+* A settings file edited by hand with Windows line ends (or without a final newline) is read correctly; changing a setting keeps the order of the lines in the file
+* The module's files are no longer writable by everyone, and temporary files left by a shutdown are removed at boot
+
+---
+
 ## 1.0-r1
 
 * **WebUI opens quickly every time** - after closing and quickly reopening it, the page could wait several seconds before showing anything. The root manager sometimes drops the page's very first command; the page now asks again after a moment instead of waiting for the lost answer

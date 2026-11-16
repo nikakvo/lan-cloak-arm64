@@ -174,7 +174,7 @@
   <h3>DHCP guard</h3>
   <p><strong>Guard</strong>: the daemon runs. <strong>Cleaner on the interface</strong>: the eBPF filter is in place right now (with Wi-Fi off it <em>waits for Wi-Fi</em>). <strong>Last request</strong>: when the phone last sent a DHCP request and whether anything was removed. <strong>Requests seen / cleaned</strong> and <strong>Removed</strong>: counted since the guard started. <em>skipped</em> (orange) counts requests with an option too long to rewrite safely; they were sent unchanged - send the Report if it ever appears.</p>
   <h3>Watchdog</h3>
-  <p>Every 10 seconds (every 2 seconds in the first 2 minutes after boot) it checks that the guard runs with the right settings on the right interface and that the firewall rules are complete, and repairs what is not. Repairs are written to the Log.</p>
+  <p>Every 20 seconds (every 2 seconds in the first 2 minutes after boot) it checks that the guard runs with the right settings on the right interface and that the firewall rules are complete, and repairs what is not. Repairs are written to the Log.</p>
   <h3>Log</h3>
   <p><strong>Module</strong>: what the module did (starts, changes, repairs). <strong>DHCP guard</strong>: the guard's own log - every time Wi-Fi goes off and on, who removed the filter, how fast it was back.</p>
 </div>
@@ -251,7 +251,7 @@ su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh help'   <span class="cm
     <tr><td>state/</td><td>Runtime state, cleared at boot; <code>state/status</code> can be read by other modules</td></tr>
   </table></div>
   <p><strong>Update:</strong> flash the new zip, reboot. Settings stay. The running version keeps working until the reboot.</p>
-  <p><strong>Disable</strong> in the root manager: the guard stops, the filter and the rules are removed at once. Enable again: back within 10 seconds.</p>
+  <p><strong>Disable</strong> in the root manager: the guard stops, the filter and the rules are removed at once. Enable again: back within 20 seconds.</p>
   <p><strong>Uninstall:</strong> everything is removed, then the data folder is deleted.</p>
 </div>
 

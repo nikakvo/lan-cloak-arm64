@@ -7,6 +7,10 @@
 # POSIX sh: runs under mksh + toybox (ksu.exec, WebUI) and busybox ash in
 # standalone mode (the root manager's scripts / installer). No bashisms.
 
+# Files are written 0644 / dirs 0755 (the status file is read by the
+# sibling modules; nothing here needs to be writable by anyone but root).
+umask 022
+
 MODULE_ID="lan-cloak"
 ADB="${LANC_ADB:-/data/adb}"   # root of the root manager's files (sibling modules)
 MODDIR="${MODDIR:-/data/adb/modules/$MODULE_ID}"
@@ -41,7 +45,7 @@ BPF="${LANC_BPF:-$MODDIR/bin/lanc-bpf}"
 # Watchdog period. The DHCP guard reacts to Wi-Fi events by itself (netlink),
 # the watchdog only checks that it runs and that the firewall rules are there.
 # Faster right after boot, while netd sets up its own chains.
-TICK=${LANC_TICK:-10}
+TICK=${LANC_TICK:-20}
 TICK_BOOT=${LANC_TICK_BOOT:-2}
 BOOT_FAST=${LANC_BOOT_FAST:-120}   # seconds of TICK_BOOT after the watchdog starts
 # A guard that failed to start (kernel refused the program) is retried this
@@ -52,17 +56,31 @@ GUARD_RETRY=300
 C_OUT="LANC_OUT"
 C_OUT6="LANC_OUT6"
 
+# A newline, for IFS and case patterns (no fork, no $'..' - POSIX sh)
+NL='
+'
+
 # ── Settings ─────────────────────────────────────────────────────────────────
 # KEY=value, read FRESH from the file on every call: the long-lived watchdog
 # must never undo a change made a moment ago from ctl.sh / the WebUI.
 SETTINGS_KEYS="ENABLED DHCP_HOSTNAME DHCP_VENDOR DHCP_PRL BLOCK_MDNS BLOCK_SSDP BLOCK_LLMNR WIFI_IFACE"
 
-conf_default() {
+conf_default() { _conf_def "$1"; echo "$_cd"; unset _cd; }
+_conf_def() { # <KEY> -> _cd (no subshell)
   case "$1" in
-    ENABLED | DHCP_HOSTNAME | DHCP_VENDOR | DHCP_PRL) echo 1 ;;
-    BLOCK_MDNS | BLOCK_SSDP | BLOCK_LLMNR) echo 1 ;;
-    WIFI_IFACE) echo auto ;;
+    ENABLED | DHCP_HOSTNAME | DHCP_VENDOR | DHCP_PRL) _cd=1 ;;
+    BLOCK_MDNS | BLOCK_SSDP | BLOCK_LLMNR) _cd=1 ;;
+    WIFI_IFACE) _cd=auto ;;
+    *) _cd="" ;;
   esac
+}
+
+# A hand-edited settings.conf may have Windows line ends (CR) or trailing
+# blanks: they are ignored, not taken as an invalid value.
+_conf_trim() { # -> strips trailing characters no value can have from _v
+  while :; do
+    case "$_v" in *[!A-Za-z0-9_.-]) _v=${_v%?} ;; *) break ;; esac
+  done
 }
 
 conf_valid() { # <KEY> <value>
@@ -84,38 +102,64 @@ _iface_name_ok() {
 # All settings in one read: sets S_<KEY> for every key (default when the
 # line is missing or invalid). One file read instead of one per key.
 conf_load() {
-  for _k in $SETTINGS_KEYS; do eval "S_$_k=\$(conf_default $_k)"; done
+  for _k in $SETTINGS_KEYS; do _conf_def "$_k"; eval "S_$_k=\$_cd"; done
   if [ -f "$CONF" ]; then
     while IFS='=' read -r _k _v; do
       case " $SETTINGS_KEYS " in *" $_k "*) ;; *) continue ;; esac
+      _conf_trim
       conf_valid "$_k" "$_v" && eval "S_$_k=\$_v"
     done < "$CONF"
   fi
-  unset _k _v
+  unset _k _v _cd
 }
 
-conf_get() { # <KEY> -> value (default when missing or invalid)
-  _cv=$(sed -n "s/^$1=//p" "$CONF" 2>/dev/null | tail -n 1)
-  conf_valid "$1" "$_cv" || _cv=$(conf_default "$1")
+conf_get() { # <KEY> -> value (default when missing or invalid; last line wins)
+  _cv=""
+  if [ -f "$CONF" ]; then
+    while IFS='=' read -r _k _v; do
+      [ "$_k" = "$1" ] && { _conf_trim; _cv=$_v; }
+    done < "$CONF"
+  fi
+  conf_valid "$1" "$_cv" || { _conf_def "$1"; _cv=$_cd; }
   echo "$_cv"
-  unset _cv
+  unset _cv _k _v _cd
 }
 
+# The key keeps its place in the file (a missing key is added at the end,
+# a repeated one is written once).
 conf_set() { # <KEY> <value>
   conf_valid "$1" "$2" || return 1
   mkdir -p "${CONF%/*}" 2>/dev/null
-  { grep -v "^$1=" "$CONF" 2>/dev/null; echo "$1=$2"; } > "$CONF.tmp" &&
-    mv -f "$CONF.tmp" "$CONF"
+  _cs=0
+  {
+    if [ -f "$CONF" ]; then
+      while IFS= read -r _cl || [ -n "$_cl" ]; do
+        case "$_cl" in
+          "$1="*) [ "$_cs" = 1 ] || echo "$1=$2"; _cs=1 ;;
+          *) printf '%s\n' "$_cl" ;;
+        esac
+      done < "$CONF"
+    fi
+    [ "$_cs" = 1 ] || echo "$1=$2"
+  } > "$CONF.tmp" && mv -f "$CONF.tmp" "$CONF"
+  _cr=$?
+  unset _cs _cl
+  return $_cr
 }
 
 # Missing keys are added with their default; existing values are kept.
 conf_init() {
   mkdir -p "${CONF%/*}" 2>/dev/null
   [ -f "$CONF" ] || : > "$CONF"
+  _ci=0
   for _k in $SETTINGS_KEYS; do
-    grep -q "^$_k=" "$CONF" 2>/dev/null || echo "$_k=$(conf_default "$_k")" >> "$CONF"
+    grep -q "^$_k=" "$CONF" 2>/dev/null && continue
+    # a hand-edited file may end without a newline: never glue onto it
+    if [ "$_ci" = 0 ] && [ -s "$CONF" ] && [ -n "$(tail -c 1 "$CONF")" ]; then echo >> "$CONF"; fi
+    _ci=1
+    echo "$_k=$(conf_default "$_k")" >> "$CONF"
   done
-  unset _k
+  unset _k _ci
 }
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -131,8 +175,14 @@ _ts() {
 }
 # The clock is set (not 1970 any more)
 clock_ok() { [ "$(date +%s)" -ge 1577836800 ] 2>/dev/null; }
-# The phone is shutting down / rebooting (netd and iptables go away)
+# The phone is shutting down / rebooting (netd and iptables go away).
+# sys.powerctl is set in the last second (also by a plain "reboot");
+# sys.shutdown.requested earlier, when Android starts its shutdown - the
+# watchdog checks the first on every tick, a failure checks both.
 shutting_down() { [ -n "$(getprop sys.powerctl 2>/dev/null)" ]; }
+shutting_down_any() {
+  shutting_down || [ -n "$(getprop sys.shutdown.requested 2>/dev/null)" ]
+}
 log_info()  { echo "$(_ts) [INFO] $*"  >> "$LOG"; }
 log_warn()  { echo "$(_ts) [WARN] $*"  >> "$LOG"; }
 log_error() { echo "$(_ts) [ERROR] $*" >> "$LOG"; }
@@ -248,6 +298,33 @@ if [ -z "$IPTS6_BIN" ]; then
   case "$IPTS6_BIN" in /*) ;; *) IPTS6_BIN="" ;; esac
 fi
 
+# ipt_chain <4|6> <chain>: like "ipt_dump <4|6> filter", but only the lines
+# about <chain>: its -N line, its rules (each after its "#C" counter line)
+# and the OUTPUT jumps to it. Result in IPC (no subshell around it). The
+# watchdog's check: one iptables-save and one sed per family, the big
+# table never passes through the shell. Fails if the table cannot be read.
+ipt_chain() {
+  IPC=""
+  if [ "$1" = 6 ]; then _db=$IPTS6_BIN; else _db=$IPTS4_BIN; fi
+  if [ -z "$_db" ]; then   # no iptables-save: the slow way
+    IPC=$(ipt_dump "$1" filter) || { unset _db; return 1; }
+    unset _db; return 0
+  fi
+  for _dx in -c ""; do     # "#T" = the table header was seen
+    # shellcheck disable=SC2086
+    IPC=$("$_db" $_dx -t filter 2>/dev/null | sed -n -e '/^\*filter$/{s/.*/#T/p;d;}' \
+      -e "s/^:$2 .*/-N $2/p" \
+      -e "/^\[[0-9]*:[0-9]*\] -A $2 /{h;s/^\[\([0-9]*\):.*-[ds]port \([0-9]*\) .*/#C \1 \2/p;g;}" \
+      -e 's/^\[[0-9]*:[0-9]*\] //' -e "/^-A $2 /p" -e "/^-A OUTPUT .*-j $2\$/p")
+    case "$IPC" in "#T"*) break ;; esac
+  done
+  unset _db _dx
+  case "$IPC" in "#T"*) ;; *) IPC=""; return 1 ;; esac
+  IPC=${IPC#"#T"}; IPC=${IPC#"$NL"}
+  return 0
+}
+
+
 # ipt_dump <4|6> <table>: the table in "iptables -S" form (-P / -N / -A
 # lines), from iptables-save when available. Fails if the table cannot be
 # read (e.g. no IPv6). Read with counters (-c): for the module's own rules
@@ -327,7 +404,7 @@ ipt_restore() {
 # The watchdog and a ctl.sh command can apply at the same moment. The lock
 # holds the owner's pid; a lock whose owner is gone is taken over.
 lanc_lock() {
-  mkdir -p "$STATE_DIR" 2>/dev/null
+  [ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR" 2>/dev/null
   _lw=0
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     _lp=""
@@ -336,7 +413,9 @@ lanc_lock() {
       rm -rf "$LOCK_DIR"; continue
     fi
     _lw=$((_lw + 1))
-    if [ "$_lw" -ge 100 ]; then   # ~10 s: owner hung
+    # ~30 s with the owner still alive: hung. A slow pass (guard stop 3 s,
+    # iptables waiting for the xtables lock) must never lose its lock.
+    if [ "$_lw" -ge 300 ]; then
       rm -rf "$LOCK_DIR"; continue
     fi
     sleep 0.1 2>/dev/null || sleep 1
@@ -349,7 +428,10 @@ lanc_unlock() { rm -rf "$LOCK_DIR" 2>/dev/null; }
 # ── Wi-Fi interface ──────────────────────────────────────────────────────────
 # Android's Wi-Fi client interface (normally wlan0). Hotspot interfaces and
 # mobile data are never touched.
+# wifi_iface: for one-off callers (ctl.sh, uninstall). Inside a pass
+# (lanc_sync) the interface is W_IF, set once by iface_resolve.
 wifi_iface() {
+  if [ -n "$W_IF" ]; then echo "$W_IF"; return 0; fi
   _wi=$(conf_get WIFI_IFACE)
   if [ "$_wi" = auto ]; then
     _wi=$(getprop wifi.interface 2>/dev/null)
@@ -359,11 +441,25 @@ wifi_iface() {
   unset _wi
 }
 
+# iface_resolve <now>: W_IF for this pass (needs conf_load). Android's
+# wifi.interface is set once by the ROM; a long-lived caller (the
+# watchdog) asks for it again at most once a minute.
+iface_resolve() {
+  if [ "$S_WIFI_IFACE" != auto ]; then W_IF=$S_WIFI_IFACE; return 0; fi
+  if [ -z "$_WP_IF" ] || [ $(( ${1:-0} - ${_WP_AT:-0} )) -ge 60 ] || [ "${1:-0}" -lt "${_WP_AT:-0}" ]; then
+    _WP_IF=$(getprop wifi.interface 2>/dev/null)
+    _iface_name_ok "$_WP_IF" || _WP_IF=wlan0
+    _WP_AT=${1:-0}
+  fi
+  W_IF=$_WP_IF
+}
+
 # connected | disconnected | absent
-wifi_state() {
-  [ -d "/sys/class/net/$1" ] || { echo absent; return 0; }
-  _os=$(cat "/sys/class/net/$1/operstate" 2>/dev/null)
-  case "$_os" in up) echo connected ;; *) echo disconnected ;; esac
+wifi_state() { wifi_state_get "$1"; echo "$W_STATE"; }
+wifi_state_get() { # <iface> -> W_STATE (no subshell)
+  [ -d "/sys/class/net/$1" ] || { W_STATE=absent; return 0; }
+  _os=""; read -r _os 2>/dev/null < "/sys/class/net/$1/operstate"
+  case "$_os" in up) W_STATE=connected ;; *) W_STATE=disconnected ;; esac
   unset _os
 }
 
@@ -374,12 +470,26 @@ module_off() { [ -f "$MODDIR/disable" ] || [ -f "$MODDIR/remove" ]; }
 
 # ── Siblings (same set) ──────────────────────────────────────────────────────
 sibling_state() { # <module-id> [other id] -> absent | disabled | enabled
+  sibling_state_get "$@"; echo "$SIB"
+}
+sibling_state_get() { # same -> SIB (no subshell)
   _sd="$ADB/modules/$1"
   [ ! -f "$_sd/module.prop" ] && [ -n "$2" ] && _sd="$ADB/modules/$2"
-  if [ ! -f "$_sd/module.prop" ]; then echo absent
-  elif [ -f "$_sd/disable" ] || [ -f "$_sd/remove" ]; then echo disabled
-  else echo enabled; fi
+  if [ ! -f "$_sd/module.prop" ]; then SIB=absent
+  elif [ -f "$_sd/disable" ] || [ -f "$_sd/remove" ]; then SIB=disabled
+  else SIB=enabled; fi
   unset _sd
+}
+
+# kv_get <file> <key> -> KV (first "key=" line, "" when none; no subshell)
+kv_get() {
+  KV=""
+  [ -f "$1" ] || return 1
+  while IFS= read -r _kl; do
+    case "$_kl" in "$2="*) KV=${_kl#*=}; unset _kl; return 0 ;; esac
+  done < "$1"
+  unset _kl
+  return 1
 }
 
 # ── Watchdog helpers ─────────────────────────────────────────────────────────
@@ -394,12 +504,18 @@ wake_watchdog() { _p=$(wd_pid); [ -n "$_p" ] && kill -USR1 "$_p" 2>/dev/null; un
 
 # ── Module status line (description in the root manager) ─────────────────────
 DESC_BASE="Hides the phone on Wi-Fi networks: clean DHCP, no mDNS / SSDP / LLMNR announcements."
+# The last line written is remembered: a long-lived caller (the watchdog)
+# reads module.prop only when the text changes.
 set_description() { # <status text>
-  [ -w "$MODPROP" ] || return 0
   _dl="description=$DESC_BASE Status: $1"
-  grep -qxF "$_dl" "$MODPROP" 2>/dev/null && { unset _dl; return 0; }
+  [ "$_DESC_LAST" = "$_dl" ] && { unset _dl; return 0; }
+  [ -w "$MODPROP" ] || { unset _dl; return 0; }
+  if grep -qxF "$_dl" "$MODPROP" 2>/dev/null; then _DESC_LAST=$_dl; unset _dl; return 0; fi
   _dt="$MODPROP.tmp.$$"
-  { grep -v '^description=' "$MODPROP"; echo "$_dl"; } > "$_dt" 2>/dev/null && mv -f "$_dt" "$MODPROP"
-  rm -f "$_dt" 2>/dev/null
+  if { grep -v '^description=' "$MODPROP"; echo "$_dl"; } > "$_dt" 2>/dev/null && mv -f "$_dt" "$MODPROP"; then
+    _DESC_LAST=$_dl
+  else
+    rm -f "$_dt" 2>/dev/null
+  fi
   unset _dl _dt
 }

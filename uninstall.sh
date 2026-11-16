@@ -23,7 +23,8 @@ else
   # Library missing: by name with the plain tools
   for _p in $(pidof lanc-bpf 2>/dev/null); do kill "$_p" 2>/dev/null; done
   sleep 1
-  [ -x "$MODDIR/bin/lanc-bpf" ] && "$MODDIR/bin/lanc-bpf" detach "$(getprop wifi.interface 2>/dev/null || echo wlan0)" >/dev/null 2>&1
+  _i=$(getprop wifi.interface 2>/dev/null); [ -n "$_i" ] || _i=wlan0
+  [ -x "$MODDIR/bin/lanc-bpf" ] && "$MODDIR/bin/lanc-bpf" detach "$_i" >/dev/null 2>&1
   # shellcheck disable=SC2086,SC2046
   for _t in "iptables LANC_OUT" "ip6tables LANC_OUT6"; do
     set -- $_t

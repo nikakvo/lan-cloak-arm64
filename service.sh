@@ -48,7 +48,8 @@ while :; do
     rm -f "$WD_PIDFILE"
     exit 0
   fi
-  tz_update
+  # the time zone changes rarely (travel): checked about once a minute
+  [ $((_n % 6)) -eq 0 ] && tz_update
   lanc_lock
   if module_off; then
     # turned off / marked for removal in the root manager: undo at once
@@ -63,13 +64,13 @@ while :; do
   fi
   lanc_sync
   lanc_unlock
-  date +%s > "$TICK_FILE"
+  echo "$P_NOW" > "$TICK_FILE"
 
   _n=$((_n + 1))
   if [ $((_n % 30)) -eq 0 ]; then log_trim; log_trim "$GUARD_LOG"; fi
 
   _t=$TICK
-  [ $(( $(date +%s) - _t0 )) -lt "$BOOT_FAST" ] && _t=$TICK_BOOT
+  [ $((P_NOW - _t0)) -lt "$BOOT_FAST" ] && _t=$TICK_BOOT
   sleep "$_t" &
   _sp=$!
   wait "$_sp" 2>/dev/null
