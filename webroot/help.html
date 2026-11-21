@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>LAN Cloak - Help</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" media="print" onload="this.media='all'">
   <style>
     :root {
       --bg: #000; --bg2: #070407; --surface: #0a060a; --surface2: #160a14;
@@ -34,7 +33,7 @@
     .box h3:first-child { margin-top: 0; }
     .box ul, .box ol { margin: 6px 0 10px 18px; } .box li { margin-bottom: 5px; }
     strong { color: var(--hi); font-weight: 600; }
-    code { font-family: var(--mono); font-size: 12px; color: var(--amber); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; word-break: break-all; }
+    code { font-family: var(--mono); font-size: 12px; color: var(--amber); background: var(--surface2); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; overflow-wrap: anywhere; }
     pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--text); margin: 8px 0; white-space: pre; }
     pre .cm { color: var(--dim); }
     .tw { overflow-x: auto; margin: 6px 0; }
@@ -54,6 +53,42 @@
     .flow .dn { color: var(--dnsc); } .flow .wg { color: var(--wgs); }
     .footer { text-align: center; padding: 28px 16px 8px; font-size: 10px; font-family: var(--mono); color: var(--dim); }
     .footer a { color: var(--acc); text-decoration: none; }
+  
+    /* Commands: mac-style box; COPY copies one command, never its comment */
+    .code-block { --cb: var(--acc); background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 10px 0; }
+    .code-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px 6px 12px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    .code-label { font-family: var(--mono); font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .code-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .code-dots { display: flex; gap: 4px; }
+    .code-dot { width: 7px; height: 7px; border-radius: 50%; display: block; }
+    .code-dot:nth-child(1) { background: #ff5f57; }
+    .code-dot:nth-child(2) { background: #febc2e; }
+    .code-dot:nth-child(3) { background: #28c840; }
+    .copy-btn { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; background: transparent; border: 1px solid var(--border2); color: var(--cb); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .05em; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+    .copy-btn:active { background: var(--surface2); }
+    .copy-btn.copied { color: #28c840; border-color: rgba(40,200,64,.45); }
+    .copy-btn.failed { color: var(--red); border-color: var(--red); }
+    .code-block pre { margin: 0; border: 0; border-radius: 0; background: transparent; padding: 0; white-space: pre-wrap; overflow-wrap: break-word; overflow-x: visible; }
+    .code-body { padding: 10px 12px; }
+    .cmd-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+    .cmd-row:last-child { border-bottom: 0; }
+    .cmd-main { flex: 1; min-width: 0; }
+    .code-block pre .sub { color: var(--cb); }
+    .cmd-note { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 2px; }
+    /* Back to top */
+    .to-top { position: fixed; right: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--border2); background: var(--surface2); color: var(--acc); display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 40; opacity: 0; pointer-events: none; transition: opacity .2s; -webkit-tap-highlight-color: transparent; }
+    .to-top.show { opacity: 1; pointer-events: auto; }
+    /* Tables on a phone: each row stacked, the name on top and its text under it */
+    @media (max-width: 640px) {
+      .tw { overflow-x: visible; }
+      .tw table, .tw tbody, .tw tr, .tw td { display: block; width: 100%; }
+      .tw tr.th-row { display: none; }
+      .tw tr { padding: 9px 0; border-bottom: 1px solid var(--border); }
+      .tw tr:last-child { border-bottom: none; }
+      .tw td { border-bottom: none; padding: 0; }
+      .tw td:first-child { white-space: normal; overflow-wrap: anywhere; padding: 0 0 3px; }
+      .tw table.multi td[data-label]::before { content: attr(data-label) ': '; color: var(--dim); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+    }
   </style>
 </head>
 <body>
@@ -91,7 +126,7 @@
   <p>LAN Cloak removes that: the DHCP request is cleaned in the kernel on its way out, and the announcements are dropped by the firewall before they leave the phone. Every part is a switch of its own.</p>
   <p>It works on Android's <strong>Wi-Fi client interface only</strong> (normally <code>wlan0</code>). Hotspot interfaces, mobile data and VPN tunnels are never touched.</p>
   <div class="tw"><table>
-    <tr><th>needs</th><th></th></tr>
+    <tr class="th-row"><th>needs</th><th></th></tr>
     <tr><td>Kernel</td><td>eBPF and tc classifiers: <code>CONFIG_BPF_SYSCALL</code>, <code>CONFIG_NET_CLS_BPF</code>, <code>CONFIG_NET_SCH_INGRESS</code> - in every Android GKI kernel. The installer loads the DHCP cleaner once to check; without these, only the announcement blocking works.</td></tr>
     <tr><td>Device</td><td>arm64.</td></tr>
     <tr><td>Root</td><td>SukiSU Ultra, KernelSU, APatch or Magisk (WebUI through MMRL / KSU WebUI Standalone).</td></tr>
@@ -112,14 +147,14 @@
 
 <div class="sec-title" id="seen">3 · what the router sees</div>
 <div class="box">
-  <div class="tw"><table>
-    <tr><th>item</th><th>without</th><th>with LAN Cloak</th></tr>
-    <tr><td>Device name</td><td class="shown">POCO-F6-Pro</td><td class="hid">nothing</td></tr>
-    <tr><td>Vendor class</td><td class="shown">android-dhcp-16</td><td class="hid">nothing</td></tr>
-    <tr><td>Request list</td><td class="shown">1,3,6,15,26,28,51,58,59,43,114,108</td><td class="hid">1,3,6,15,26,28,51,58,59</td></tr>
-    <tr><td>mDNS</td><td class="shown">the phone + its apps, every few seconds</td><td class="hid">nothing</td></tr>
-    <tr><td>SSDP</td><td class="shown">searches for UPnP devices</td><td class="hid">nothing</td></tr>
-    <tr><td>LLMNR</td><td class="shown">name lookups to all devices</td><td class="hid">nothing</td></tr>
+  <div class="tw"><table class="multi">
+    <tr class="th-row"><th>item</th><th>without</th><th>with LAN Cloak</th></tr>
+    <tr><td>Device name</td><td class="shown" data-label="without">POCO-F6-Pro</td><td class="hid" data-label="with LAN Cloak">nothing</td></tr>
+    <tr><td>Vendor class</td><td class="shown" data-label="without">android-dhcp-16</td><td class="hid" data-label="with LAN Cloak">nothing</td></tr>
+    <tr><td>Request list</td><td class="shown" data-label="without">1,3,6,15,26,28,51,58,59,43,114,108</td><td class="hid" data-label="with LAN Cloak">1,3,6,15,26,28,51,58,59</td></tr>
+    <tr><td>mDNS</td><td class="shown" data-label="without">the phone + its apps, every few seconds</td><td class="hid" data-label="with LAN Cloak">nothing</td></tr>
+    <tr><td>SSDP</td><td class="shown" data-label="without">searches for UPnP devices</td><td class="hid" data-label="with LAN Cloak">nothing</td></tr>
+    <tr><td>LLMNR</td><td class="shown" data-label="without">name lookups to all devices</td><td class="hid" data-label="with LAN Cloak">nothing</td></tr>
     <tr><td>MAC address</td><td colspan="2">unchanged - Android's (see 8)</td></tr>
   </table></div>
   <p>The tiles at the top of the WebUI show exactly this for the current settings: <span class="pill ok">hidden</span> in magenta, what still goes out in orange, red when a part failed. Below them: the Wi-Fi MAC address (and whether it is Android's random one or the factory address) and the IP address the router gave the phone.</p>
@@ -133,11 +168,11 @@
     router
   </div>
   <h3>The three switches</h3>
-  <div class="tw"><table>
-    <tr><th>switch</th><th>DHCP option</th><th>what it does</th></tr>
-    <tr><td>Hide the device name</td><td>12, 81</td><td>Removes the host name (the device name from Settings → About phone, made DNS-safe) and the FQDN option. The router lists the phone without a name.</td></tr>
-    <tr><td>Hide the vendor class</td><td>60</td><td>Removes <code>android-dhcp-&lt;version&gt;</code>. The router does not learn the operating system or its version from it.</td></tr>
-    <tr><td>Generic request list</td><td>55</td><td>Keeps the 9 settings every client asks for and drops Android's typical extra ones (see below). Systems that identify devices on a network (the "fingerprint" databases routers and firewalls use) recognise Android by this list alone.</td></tr>
+  <div class="tw"><table class="multi">
+    <tr class="th-row"><th>switch</th><th>DHCP option</th><th>what it does</th></tr>
+    <tr><td>Hide the device name</td><td data-label="DHCP option">12, 81</td><td data-label="what it does">Removes the host name (the device name from Settings → About phone, made DNS-safe) and the FQDN option. The router lists the phone without a name.</td></tr>
+    <tr><td>Hide the vendor class</td><td data-label="DHCP option">60</td><td data-label="what it does">Removes <code>android-dhcp-&lt;version&gt;</code>. The router does not learn the operating system or its version from it.</td></tr>
+    <tr><td>Generic request list</td><td data-label="DHCP option">55</td><td data-label="what it does">Keeps the 9 settings every client asks for and drops Android's typical extra ones (see below). Systems that identify devices on a network (the "fingerprint" databases routers and firewalls use) recognise Android by this list alone.</td></tr>
   </table></div>
   <h3>The generic list</h3>
   <p>Kept: <code>1</code> subnet mask, <code>3</code> router, <code>6</code> DNS servers, <code>15</code> domain name, <code>26</code> MTU, <code>28</code> broadcast address, <code>51</code> lease time, <code>58</code> / <code>59</code> renewal times. Dropped: <code>43</code> vendor-specific information, <code>114</code> captive portal address, <code>108</code> "IPv6-only preferred". Nothing the phone needs is lost: Android finds a hotel login page by its own network check anyway, and without 108 the phone simply keeps IPv4 on networks that offer an IPv6-only mode.</p>
@@ -151,11 +186,11 @@
 
 <div class="sec-title" id="ann">5 · announcements: mdns, ssdp, llmnr</div>
 <div class="box">
-  <div class="tw"><table>
-    <tr><th>switch</th><th>blocks</th><th>stops working while on</th></tr>
-    <tr><td>Block mDNS</td><td>UDP 5353 to <code>224.0.0.251</code> / <code>ff02::fb</code>, and answers from port 5353</td><td><strong>Casting</strong> to a TV / Chromecast (Google Cast), Spotify Connect and similar "play on" lists, finding printers over Wi-Fi, Xiaomi HyperConnect / Mi Share discovery, other apps that look for devices nearby.</td></tr>
-    <tr><td>Block SSDP</td><td>UDP 1900 to <code>239.255.255.250</code> / <code>ff02::c</code> / <code>ff05::c</code>, and answers from port 1900</td><td>UPnP / DLNA: casting to DLNA TVs, media servers, some smart-home apps.</td></tr>
-    <tr><td>Block LLMNR</td><td>UDP 5355 to any multicast address, answers from port 5355 (UDP and TCP)</td><td>Nothing common on Android.</td></tr>
+  <div class="tw"><table class="multi">
+    <tr class="th-row"><th>switch</th><th>blocks</th><th>stops working while on</th></tr>
+    <tr><td>Block mDNS</td><td data-label="blocks">UDP 5353 to <code>224.0.0.251</code> / <code>ff02::fb</code>, and answers from port 5353</td><td data-label="stops working while on"><strong>Casting</strong> to a TV / Chromecast (Google Cast), Spotify Connect and similar "play on" lists, finding printers over Wi-Fi, Xiaomi HyperConnect / Mi Share discovery, other apps that look for devices nearby.</td></tr>
+    <tr><td>Block SSDP</td><td data-label="blocks">UDP 1900 to <code>239.255.255.250</code> / <code>ff02::c</code> / <code>ff05::c</code>, and answers from port 1900</td><td data-label="stops working while on">UPnP / DLNA: casting to DLNA TVs, media servers, some smart-home apps.</td></tr>
+    <tr><td>Block LLMNR</td><td data-label="blocks">UDP 5355 to any multicast address, answers from port 5355 (UDP and TCP)</td><td data-label="stops working while on">Nothing common on Android.</td></tr>
   </table></div>
   <p>The phone still <strong>receives</strong> other devices' announcements; it just never answers or announces itself. If you cast at home only, switch mDNS (and SSDP) off for a moment while casting, then on again - the switch acts at once, no reboot.</p>
   <h3>How it works</h3>
@@ -166,7 +201,7 @@
 <div class="sec-title" id="states">6 · states and the dashboard</div>
 <div class="box">
   <div class="tw"><table>
-    <tr><th>state</th><th>meaning</th></tr>
+    <tr class="th-row"><th>state</th><th>meaning</th></tr>
     <tr><td><span class="pill ok">cloaked</span></td><td>Everything selected is in place. With Wi-Fi off the banner says <em>Cloak ready</em>: the guard waits and acts the moment Wi-Fi connects.</td></tr>
     <tr><td><span class="pill bad">error</span></td><td>A part could not be set: the DHCP guard did not start (the kernel refused the program - the Log has the kernel's report), or the firewall rules failed. The other part keeps working. A failed guard is retried every 5 minutes, or at once with <strong>Check now</strong>.</td></tr>
     <tr><td><span class="pill skip">off</span></td><td>Switched off in Settings, every option off, or the module disabled in the root manager. Wi-Fi works exactly as Android does it; nothing of the module is active.</td></tr>
@@ -209,17 +244,19 @@
 <div class="sec-title" id="cli">9 · command line</div>
 <div class="box">
   <p>Every WebUI action is a <code>ctl.sh</code> command. From Termux:</p>
-<pre>su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh status'   <span class="cm"># fresh check, everything</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set BLOCK_MDNS 0'   <span class="cm"># mDNS allowed</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set BLOCK_MDNS 1'
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh set ENABLED 0'   <span class="cm"># everything off</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh dhcp'   <span class="cm"># the cleaner's counters</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh wifi-restart'   <span class="cm"># new DHCP request now</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh sync force'   <span class="cm"># check, repair, retry the guard</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh log 100'
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh guardlog 100'
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh diag'   <span class="cm"># report</span>
-su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh help'   <span class="cm"># every command and setting</span></pre>
+<div class="code-block"><div class="code-header"><span class="code-label">From Termux</span><div class="code-header-right"><div class="code-dots"><span class="code-dot"></span><span class="code-dot"></span><span class="code-dot"></span></div></div></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">status</span>'</pre><div class="cmd-note">fresh check, everything</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">set BLOCK_MDNS 0</span>'</pre><div class="cmd-note">mDNS allowed</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">set BLOCK_MDNS 1</span>'</pre></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">set ENABLED 0</span>'</pre><div class="cmd-note">everything off</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">dhcp</span>'</pre><div class="cmd-note">the cleaner's counters</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">wifi-restart</span>'</pre><div class="cmd-note">new DHCP request now</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">sync force</span>'</pre><div class="cmd-note">check, repair, retry the guard</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">log 100</span>'</pre></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">guardlog 100</span>'</pre></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">diag</span>'</pre><div class="cmd-note">report</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+<div class="cmd-row"><div class="cmd-main"><pre>su -c '/<wbr>system/<wbr>bin/<wbr>sh /<wbr>data/<wbr>adb/<wbr>modules/<wbr>lan-cloak/<wbr>ctl.sh <span class="sub">help</span>'</pre><div class="cmd-note">every command and setting</div></div><button class="copy-btn" type="button" onclick="copyCode(this)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY</button></div>
+</div>
   <p>Settings: <code>ENABLED</code>, <code>DHCP_HOSTNAME</code>, <code>DHCP_VENDOR</code>, <code>DHCP_PRL</code>, <code>BLOCK_MDNS</code>, <code>BLOCK_SSDP</code>, <code>BLOCK_LLMNR</code> (each <code>0</code> or <code>1</code>), <code>WIFI_IFACE</code> (<code>auto</code> or an interface name).</p>
   <p>To see a request yourself, capture on the phone (for example from a Linux chroot): <code>tcpdump -i wlan0 -n -vvv 'udp port 67 or udp port 68'</code>, then Restart Wi-Fi. No <em>Hostname</em>, no <em>Vendor-Class</em>, and <em>Parameter-Request</em> with 9 entries.</p>
 </div>
@@ -243,7 +280,7 @@ su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh help'   <span class="cm
 <div class="sec-title" id="files">11 · files, update, uninstall</div>
 <div class="box">
   <div class="tw"><table>
-    <tr><th>file</th><th></th></tr>
+    <tr class="th-row"><th>file</th><th></th></tr>
     <tr><td>/data/adb/lan-cloak/</td><td>Everything the module keeps, in one folder:</td></tr>
     <tr><td>settings.conf</td><td>Settings (kept on update)</td></tr>
     <tr><td>logs/lan-cloak.log</td><td>Module log</td></tr>
@@ -257,8 +294,63 @@ su -c '/system/bin/sh /data/adb/modules/lan-cloak/ctl.sh help'   <span class="cm
 
 <div class="footer">LAN Cloak Arm64 · by Tears Burn · <a href="index.html">back to dashboard</a></div>
 
+<button class="to-top" id="toTop" type="button" onclick="toTop()" aria-label="Back to top"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"/></svg></button>
 <script>
-function goBack() { if (history.length > 1) history.back(); else location.href = 'index.html'; }
+// history.back() is right when the user came from index.html. After a tap in
+// the contents it only goes to the previous #section (same page, no pagehide),
+// and some managers open a webroot file directly with no history at all: in
+// both cases nothing has left this page after 300 ms, so go to index.html.
+function goBack() {
+  var left = false;
+  window.addEventListener('pagehide', function () { left = true; });
+  if (window.history.length > 1) {
+    window.history.back();
+    setTimeout(function () { if (!left) window.location.href = 'index.html'; }, 300);
+  } else {
+    window.location.href = 'index.html';
+  }
+}
+
+  // ── Copy a command (comments are not copied) ──
+  var ICON_COPY = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>COPY';
+  function codeText(pre) {
+    var c = pre.cloneNode(true);
+    c.querySelectorAll('.cm').forEach(function (n) { n.remove(); });
+    return c.textContent.replace(/\s+$/, '').replace(/^\s+/, '');
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.top = '-1000px';
+    document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function copyCode(btn) {
+    var box = btn.closest('.cmd-row') || btn.closest('.code-block');
+    var text = codeText(box.querySelector('pre'));
+    function done(ok) {
+      btn.classList.add(ok ? 'copied' : 'failed');
+      btn.textContent = ok ? 'COPIED' : 'FAILED';
+      setTimeout(function () { btn.classList.remove('copied', 'failed'); btn.innerHTML = ICON_COPY; }, 1600);
+    }
+    // The WebView of some root managers has no navigator.clipboard, or rejects it.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(text)); });
+    } else {
+      done(fallbackCopy(text));
+    }
+  }
+  // ── Back to top ──
+  function toTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  (function () {
+    var b = document.getElementById('toTop');
+    function upd() { b.classList.toggle('show', (window.scrollY || document.documentElement.scrollTop) > 400); }
+    window.addEventListener('scroll', upd, { passive: true });
+    upd();
+  })();
 </script>
 </body>
 </html>

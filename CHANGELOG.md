@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0-r3
+
+* **The WebUI and Help load nothing from the internet** - the Google web font is gone (it sent a request to Google on every open); the text uses the phone's own monospace font
+* **Help reads better on the phone** - table rows are stacked (the name on top, its text under it at full width, no more sideways scrolling), every example command sits in a box with its own **COPY** button (only that one command is copied, never its comment), and an arrow at the bottom right jumps back to the top
+* **Help ‹ BACK returns to the dashboard** also after a jump through the contents (it went back only to the top of Help)
+* The module's scripts are unchanged
+
+---
+
 ## 1.0-r2
 
 * **Uses far less CPU** - the watchdog now does its check every 20 seconds instead of 10 and starts about a tenth of the programs per check. Measured on the phone: from 1.3-2.3 % of one CPU core down to about 0.7 % before the longer interval. The WebUI also answers about three times faster
