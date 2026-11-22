@@ -1,6 +1,6 @@
 {
-  "version": "1.0-r3",
-  "versionCode": 4,
-  "zipUrl": "https://github.com/nikakvo/lan-cloak-arm64/releases/download/v1.0-r3/lan-cloak-arm64-v1.0-r3.zip",
+  "version": "1.0-r4",
+  "versionCode": 5,
+  "zipUrl": "https://github.com/nikakvo/lan-cloak-arm64/releases/download/v1.0-r4/lan-cloak-arm64-v1.0-r4.zip",
   "changelog": "https://raw.githubusercontent.com/nikakvo/lan-cloak-arm64/main/CHANGELOG.md"
 }
