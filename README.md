@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/ARM64-only-ff3dd2?style=flat-square" />
-  <img src="https://img.shields.io/badge/v1.0--r3-blue?style=flat-square" />
+  <img src="https://img.shields.io/badge/v1.0--r4-blue?style=flat-square" />
   <img src="https://img.shields.io/badge/SukiSU%20%2F%20KernelSU%20%2F%20Magisk-compatible-brightgreen?style=flat-square" />
   <img src="https://img.shields.io/badge/DHCP%20cleaner-eBPF-ff3dd2?style=flat-square" />
   <img src="https://img.shields.io/badge/WebUI-built%20in-ff3dd2?style=flat-square" />

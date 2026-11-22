@@ -1,7 +1,7 @@
 id=lan-cloak
 name=LAN Cloak Arm64
-version=1.0-r3
-versionCode=4
+version=1.0-r4
+versionCode=5
 author=Tears Burn
 banner=lan-cloak.png
 description=Hides the phone on Wi-Fi networks: clean DHCP, no mDNS / SSDP / LLMNR announcements. Status: Init

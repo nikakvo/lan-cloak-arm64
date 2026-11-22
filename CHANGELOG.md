@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0-r4
+
+* **One phone Back leaves Help** - the contents and the links to other sections no longer add steps to the phone's Back, however many sections you opened
+* The module's scripts are unchanged
+
+---
+
 ## 1.0-r3
 
 * **The WebUI and Help load nothing from the internet** - the Google web font is gone (it sent a request to Google on every open); the text uses the phone's own monospace font
